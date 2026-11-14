@@ -61,45 +61,47 @@ function Field({ label, icon: Icon, children }: { label: string; icon: React.Ele
 }
 
 
-/* ── Fun illustrated avatars with accessories (DiceBear adventurer + open-peeps) ── */
-const MEN_SEEDS = [
-  'soccer-mike','boxer-alex','baseball-tom','golfer-chris','tennis-leo','rugby-ben','swimmer-dan',
-  'cyclist-ryan','runner-jake','climber-noah','surfer-eli','skater-max','archer-sam','knight-will',
-  'wizard-fred','pirate-jack','ninja-karl','cowboy-dean','astronaut-ray','chef-paul',
-  'doctor-evan','pilot-scott','detective-cole','firefighter-seth','soldier-kyle',
-  'gamer-tyler','DJ-omar','artist-lucas','writer-adam','musician-eric',
-  'basketball-james','hockey-peter','volleyball-simon','cricket-rahul','handball-boris',
-  'fencer-hugo','wrestler-omar','judo-kenji','karate-tao','boxing-troy',
-  'sailing-finn','fishing-ned','hiking-oscar','skiing-lars','snowboard-vince',
-  'motocross-rex','F1-nico','marathon-kofi','triathlon-yusuf','ironman-ethan',
-]
-const WOMEN_SEEDS = [
-  'gymnast-sofia','tennis-mia','ballet-emma','yoga-luna','swimmer-zoe',
-  'runner-aria','cyclist-ivy','surfer-nova','skater-ruby','archer-jade',
-  'chef-lily','doctor-chloe','pilot-nora','artist-nina','musician-ella',
-  'soccer-grace','basketball-faith','volleyball-hope','hockey-rose','rugby-dawn',
-  'fencer-ines','judoka-yuki','karate-suki','boxer-roxy','climber-eva',
-  'hiker-sierra','skier-aspen','snowboard-winter','sailing-marina','fishing-pearl',
-  'detective-vera','knight-diana','wizard-aurora','pirate-morgan','ninja-kira',
-  'astronaut-lyra','firefighter-tess','soldier-lexi','gamer-pixel','DJ-hana',
-  'marathon-aisha','triathlon-priya','crossfit-brooke','volleyball-camille','cricket-ananya',
-  'lacrosse-claire','handball-katrin','cycling-britta','rowing-astrid','archery-freya',
-]
+/* ── Local emoji avatars — no external service needed ── */
+const MEN_AVATARS = [
+  ['👨‍💼','4f46e5'],['👨‍💻','0369a1'],['👨‍🔬','0891b2'],['👨‍🎨','7c3aed'],['👨‍🚀','0f172a'],
+  ['👨‍🍳','b45309'],['👨‍✈️','1d4ed8'],['🧑‍🎤','9333ea'],['👨‍🏫','16a34a'],['👨‍⚕️','0e7490'],
+  ['🧑‍💻','4338ca'],['👨‍🔧','92400e'],['🧑‍🚒','dc2626'],['👨‍🎓','15803d'],['🧙','6d28d9'],
+  ['🕵️','374151'],['🧑‍🎯','0d9488'],['👨‍🏋️','b91c1c'],['🧑‍🤝‍🧑','1e40af'],['🧑‍⚕️','065f46'],
+].map(([e, c]) => `local:${e}:${c}`)
 
-const bgMen   = 'b6e3f4,c0aede,d1d4f9,e0f2fe,dbeafe'
-const bgWomen = 'ffd5dc,ffdfbf,fce7f3,f5d0fe,ede9fe'
+const WOMEN_AVATARS = [
+  ['👩‍💼','7c3aed'],['👩‍💻','0369a1'],['👩‍🔬','0891b2'],['👩‍🎨','db2777'],['👩‍🚀','4f46e5'],
+  ['👩‍🍳','b45309'],['👩‍✈️','1d4ed8'],['🧑‍🎤','9333ea'],['👩‍🏫','16a34a'],['👩‍⚕️','0e7490'],
+  ['🧑‍💻','4338ca'],['👩‍🔧','92400e'],['🧑‍🚒','dc2626'],['👩‍🎓','15803d'],['🧚','6d28d9'],
+  ['🕵️','374151'],['🧑‍🎯','0d9488'],['👩‍🏋️','b91c1c'],['🧜','1e40af'],['🧑‍⚕️','065f46'],
+].map(([e, c]) => `local:${e}:${c}`)
 
-const MEN_AVATARS   = MEN_SEEDS.map(s =>
-  `https://api.dicebear.com/9.x/adventurer/svg?seed=${s}&backgroundColor=${bgMen}&backgroundType=gradientLinear`)
-const WOMEN_AVATARS = WOMEN_SEEDS.map(s =>
-  `https://api.dicebear.com/9.x/adventurer/svg?seed=${s}&backgroundColor=${bgWomen}&backgroundType=gradientLinear`)
+function LocalAvatar({ value, size = 14, ring = false }: { value: string; size?: number; ring?: boolean }) {
+  const [, emoji, color] = value.split(':')
+  const px = size * 4
+  return (
+    <div style={{
+      width: px, height: px, minWidth: px,
+      backgroundColor: `#${color}`,
+      borderRadius: '50%',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      outline: ring ? '2px solid #6366f1' : undefined,
+      outlineOffset: ring ? '2px' : undefined,
+    }}>
+      <span style={{ fontSize: px * 0.55, lineHeight: 1 }}>{emoji}</span>
+    </div>
+  )
+}
 
 function AvatarDisplay({ avatar, name, size = 14 }: { avatar?: string | null; name?: string; size?: number }) {
+  const px = size * 4
+  if (avatar?.startsWith('local:')) return <LocalAvatar value={avatar} size={size} />
   if (avatar?.startsWith('http') || avatar?.startsWith('data:')) return (
-    <img src={avatar} className={`w-${size} h-${size} rounded-full object-cover bg-gray-100 shrink-0`} />
+    <img src={avatar} style={{ width: px, height: px, minWidth: px }} className="rounded-full object-cover bg-gray-100 shrink-0" />
   )
   return (
-    <div className={`w-${size} h-${size} rounded-full bg-primary-500 flex items-center justify-center text-white font-bold shrink-0 text-xl`}>
+    <div style={{ width: px, height: px, minWidth: px, fontSize: px * 0.4 }}
+      className="rounded-full bg-primary-500 flex items-center justify-center text-white font-bold shrink-0">
       {name?.[0]?.toUpperCase() ?? 'U'}
     </div>
   )
@@ -245,13 +247,13 @@ function ProfileDrawer({ onClose }: { onClose: () => void }) {
                 {/* grid */}
                 <div className="h-52 overflow-y-auto rounded-lg border border-gray-100">
                   <div className="grid grid-cols-5 gap-1.5 p-2">
-                    {(avatarTab === 'men' ? MEN_AVATARS : WOMEN_AVATARS).map(url => (
-                      <button key={url} type="button" onClick={() => setAvatar(url)}
+                    {(avatarTab === 'men' ? MEN_AVATARS : WOMEN_AVATARS).map(val => (
+                      <button key={val} type="button" onClick={() => setAvatar(val)}
                         className={clsx(
                           'w-full aspect-square rounded-full overflow-hidden transition-all',
-                          avatar === url ? 'ring-2 ring-offset-1 ring-primary-500 scale-105' : 'opacity-80 hover:opacity-100 hover:scale-105'
+                          avatar === val ? 'ring-2 ring-offset-1 ring-primary-500 scale-105' : 'opacity-80 hover:opacity-100 hover:scale-105'
                         )}>
-                        <img src={url} className="w-full h-full object-cover" loading="lazy" />
+                        <LocalAvatar value={val} size={10} ring={avatar === val} />
                       </button>
                     ))}
                   </div>
