@@ -26,9 +26,15 @@ class Settings(BaseSettings):
         url = self.DATABASE_URL
         # Neon/Render give postgresql:// — SQLAlchemy async needs postgresql+asyncpg://
         if url.startswith("postgresql://"):
-            return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        if url.startswith("postgres://"):
-            return url.replace("postgres://", "postgresql+asyncpg://", 1)
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        elif url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        else:
+            return url  # sqlite — no changes needed
+        # asyncpg uses ssl=require, not sslmode=require
+        url = url.replace("sslmode=require", "ssl=require")
+        # Remove channel_binding param which asyncpg doesn't understand
+        url = url.replace("&channel_binding=require", "").replace("?channel_binding=require&", "?").replace("?channel_binding=require", "")
         return url
 
     class Config:
