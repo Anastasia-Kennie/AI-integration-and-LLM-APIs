@@ -344,12 +344,12 @@ export default function Sidebar() {
 
   return (
     <aside className="w-56 bg-white border-r border-gray-100 flex flex-col py-4 shrink-0">
-      <div className="px-4 mb-4 flex items-center gap-2">
+      <button onClick={() => navigate('/dashboard')} className="px-4 mb-4 flex items-center gap-2 hover:opacity-80 transition-opacity">
         <div className="w-7 h-7 bg-primary-600 rounded-lg flex items-center justify-center">
           <Sparkles size={14} className="text-white" />
         </div>
         <span className="font-bold text-gray-900">Relay</span>
-      </div>
+      </button>
 
       <div className="px-4 mb-4">
         <button className="flex items-center justify-between w-full px-2 py-1.5 text-xs text-gray-500 bg-gray-50 rounded-md hover:bg-gray-100">
