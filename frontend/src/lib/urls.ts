@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 // In development: API goes through Vite proxy (empty base), WS hits localhost directly.
 // In production: both use the deployed Render backend URL from env vars.
 
