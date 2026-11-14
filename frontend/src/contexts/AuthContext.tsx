@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
+import toast from 'react-hot-toast'
 import api from '../services/api'
 
 interface User {
@@ -47,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`
     setToken(access_token)
     setUser(userData)
+    toast.success(`Welcome back, ${userData.name}! 👋`)
   }
 
   const register = async (name: string, email: string, password: string, role: string, extra?: Record<string, unknown>) => {
