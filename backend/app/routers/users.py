@@ -111,14 +111,43 @@ async def delete_user(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    # remove their invitations first to avoid stale FK references
-    from app.models import DirectInvitation
+
+    from app.models import (
+        DirectInvitation, ChatMessage, ChatRoom, RoomLastRead,
+        ProjectMember, ProjectFile, AIConversation
+    )
     from sqlalchemy import or_, delete as sql_delete
-    await db.execute(
-        sql_delete(DirectInvitation).where(
+
+    # Find all chat rooms this user is part of via invitations
+    inv_result = await db.execute(
+        select(DirectInvitation).where(
             or_(DirectInvitation.from_id == user_id, DirectInvitation.to_id == user_id)
         )
     )
+    invitations = inv_result.scalars().all()
+    room_ids = [inv.room_id for inv in invitations if inv.room_id]
+
+    # Delete all chat messages in those rooms + messages sent by user
+    if room_ids:
+        await db.execute(sql_delete(ChatMessage).where(ChatMessage.room_id.in_(room_ids)))
+        await db.execute(sql_delete(RoomLastRead).where(RoomLastRead.room_id.in_(room_ids)))
+    await db.execute(sql_delete(ChatMessage).where(ChatMessage.sender_id == user_id))
+    await db.execute(sql_delete(RoomLastRead).where(RoomLastRead.user_id == user_id))
+
+    # Delete invitations and their rooms
+    await db.execute(sql_delete(DirectInvitation).where(
+        or_(DirectInvitation.from_id == user_id, DirectInvitation.to_id == user_id)
+    ))
+    if room_ids:
+        await db.execute(sql_delete(ChatRoom).where(ChatRoom.id.in_(room_ids)))
+
+    # Delete project memberships and files uploaded by this user
+    await db.execute(sql_delete(ProjectMember).where(ProjectMember.user_id == user_id))
+    await db.execute(sql_delete(ProjectFile).where(ProjectFile.uploader_id == user_id))
+
+    # Delete AI conversation history
+    await db.execute(sql_delete(AIConversation).where(AIConversation.user_id == user_id))
+
     await db.delete(user)
     await db.commit()
     return {"message": "User deleted"}
