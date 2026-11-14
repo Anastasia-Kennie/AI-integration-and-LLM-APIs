@@ -495,18 +495,18 @@ export default function Chat() {
                     placeholder={uploading ? 'Uploading…' : `Message ${active.user.name}…`}
                     disabled={uploading}
                     style={{ width: '100%', padding: '8px 14px', fontSize: 14, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', outline: 'none', boxSizing: 'border-box' }} />
-                  {/* Row 2: File · Voice · Send — all left-aligned */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {/* Row 2: left-to-right: File · Voice · Send */}
+                  <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: '8px' }}>
                     <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-                      style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: '8px', background: 'white', cursor: 'pointer', fontSize: 13, color: '#6b7280' }}>
+                      style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '4px', padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: '8px', background: 'white', cursor: 'pointer', fontSize: 13, color: '#6b7280' }}>
                       <Paperclip size={14} /> File
                     </button>
                     <button onClick={startRecording} disabled={uploading}
-                      style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: '8px', background: 'white', cursor: 'pointer', fontSize: 13, color: '#6b7280' }}>
+                      style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '4px', padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: '8px', background: 'white', cursor: 'pointer', fontSize: 13, color: '#6b7280' }}>
                       <Mic size={14} /> Voice
                     </button>
                     <button onClick={sendMessage} disabled={!input.trim() || uploading}
-                      style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '7px 16px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: 13, fontWeight: 500, opacity: (!input.trim() || uploading) ? 0.5 : 1 }}>
+                      style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '4px', padding: '7px 16px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: 13, fontWeight: 500, opacity: (!input.trim() || uploading) ? 0.5 : 1 }}>
                       <Send size={14} /> Send
                     </button>
                   </div>
