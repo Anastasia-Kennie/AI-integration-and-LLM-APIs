@@ -28,6 +28,21 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     db.add(user)
     await db.commit()
     await db.refresh(user)
+
+    # Notify all online managers of the new registration
+    from app.routers.chat import notify_user, presence_sockets
+    manager_result = await db.execute(
+        select(User).where(User.role == 'manager', User.is_active == True)
+    )
+    manager_ids = {u.id for u in manager_result.scalars().all()}
+    for mid in list(presence_sockets.keys()):
+        if mid in manager_ids:
+            await notify_user(mid, {
+                "type": "new_registration",
+                "name": user.name,
+                "email": user.email,
+            })
+
     return user
 
 @router.post("/login", response_model=Token)

@@ -56,6 +56,12 @@ async def presence_ws(websocket: WebSocket, token: str):
     await websocket.accept()
     online_user_ids.add(user_id)
     presence_sockets.setdefault(user_id, []).append(websocket)
+
+    # Notify other connected users that presence changed
+    for uid in list(presence_sockets.keys()):
+        if uid != user_id:
+            await notify_user(uid, {"type": "presence_changed"})
+
     try:
         while True:
             await websocket.receive_text()
@@ -68,6 +74,12 @@ async def presence_ws(websocket: WebSocket, token: str):
             socks.remove(websocket)
         if not socks and user_id in presence_sockets:
             del presence_sockets[user_id]
+
+        # Notify other connected users that presence changed
+        for uid in list(presence_sockets.keys()):
+            if uid != user_id:
+                await notify_user(uid, {"type": "presence_changed"})
+
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(User).where(User.id == user_id))
             u = result.scalar_one_or_none()

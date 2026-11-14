@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { usePresence } from '../contexts/PresenceContext'
 import { useNavigate } from 'react-router-dom'
@@ -74,7 +74,7 @@ function StatCard({ icon: Icon, label, value, iconBg }: {
 
 export default function Dashboard() {
   const { user } = useAuth()
-  const { unreadRooms } = usePresence()
+  const { unreadRooms, lastEvent } = usePresence()
   const navigate = useNavigate()
   const [stats, setStats]       = useState<Stats | null>(null)
   const [volume, setVolume]     = useState<VolumeData[]>([])
@@ -82,24 +82,13 @@ export default function Dashboard() {
   const [activity, setActivity] = useState<RecentMessage[]>([])
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([])
 
-  const fetchPending = () => {
+  const fetchPending = useCallback(() => {
     if (user?.role === 'manager') {
       api.get('/api/users/pending').then(r => setPendingUsers(r.data)).catch(() => {})
     }
-  }
+  }, [user])
 
-  async function approveUser(id: number) {
-    await api.post(`/api/users/${id}/approve`)
-    setPendingUsers(prev => prev.filter(u => u.id !== id))
-  }
-
-  async function rejectUser(id: number) {
-    await api.delete(`/api/users/${id}/reject`)
-    setPendingUsers(prev => prev.filter(u => u.id !== id))
-  }
-
-  useEffect(() => {
-    fetchPending()
+  const fetchAll = useCallback(() => {
     Promise.all([
       api.get('/api/dashboard/stats'),
       api.get('/api/dashboard/conversation-volume'),
@@ -110,8 +99,51 @@ export default function Dashboard() {
       setVolume(v.data)
       setMembers(m.data)
       setActivity(a.data)
-    })
+    }).catch(() => {})
   }, [])
+
+  async function approveUser(id: number) {
+    await api.post(`/api/users/${id}/approve`)
+    setPendingUsers(prev => prev.filter(u => u.id !== id))
+    fetchAll()
+  }
+
+  async function rejectUser(id: number) {
+    await api.delete(`/api/users/${id}/reject`)
+    setPendingUsers(prev => prev.filter(u => u.id !== id))
+    fetchAll()
+  }
+
+  // Initial load
+  useEffect(() => {
+    fetchPending()
+    fetchAll()
+  }, [fetchPending, fetchAll])
+
+  // 30s polling fallback for all dashboard data
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchAll()
+      fetchPending()
+    }, 30000)
+    return () => clearInterval(timer)
+  }, [fetchAll, fetchPending])
+
+  // React to real-time WebSocket events
+  useEffect(() => {
+    if (!lastEvent) return
+    const { type } = lastEvent
+    if (type === 'new_registration') {
+      fetchPending()
+      api.get('/api/dashboard/stats').then(r => setStats(r.data)).catch(() => {})
+    } else if (type === 'presence_changed') {
+      api.get('/api/dashboard/online-members').then(r => setMembers(r.data)).catch(() => {})
+    } else if (type === 'new_message') {
+      api.get('/api/dashboard/stats').then(r => setStats(r.data)).catch(() => {})
+      api.get('/api/dashboard/recent-activity').then(r => setActivity(r.data)).catch(() => {})
+      api.get('/api/dashboard/conversation-volume').then(r => setVolume(r.data)).catch(() => {})
+    }
+  }, [lastEvent, fetchPending])
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
