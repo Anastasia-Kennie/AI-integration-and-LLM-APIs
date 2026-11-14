@@ -32,17 +32,11 @@ async def list_projects(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role == "manager":
-        result = await db.execute(
-            select(Project).options(selectinload(Project.manager))
-            .where(Project.manager_id == current_user.id, Project.is_active == True)
-        )
-    else:
-        result = await db.execute(
-            select(Project).join(ProjectMember, ProjectMember.project_id == Project.id)
-            .options(selectinload(Project.manager))
-            .where(ProjectMember.user_id == current_user.id, Project.is_active == True)
-        )
+    result = await db.execute(
+        select(Project).options(selectinload(Project.manager))
+        .where(Project.is_active == True)
+        .order_by(Project.created_at.desc())
+    )
     return result.scalars().all()
 
 @router.post("/{project_id}/members/{user_id}")
@@ -83,12 +77,6 @@ async def _get_project(project_id: int, db: AsyncSession, user: User):
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    if user.role != "manager" and project.manager_id != user.id:
-        member = await db.execute(select(ProjectMember).where(
-            ProjectMember.project_id == project_id, ProjectMember.user_id == user.id
-        ))
-        if not member.scalar_one_or_none():
-            raise HTTPException(status_code=403, detail="Not a project member")
     return project
 
 @router.post("/{project_id}/files")

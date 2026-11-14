@@ -204,11 +204,6 @@ export default function Projects() {
         )}
       </div>
 
-      {!isManager && (
-        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
-          You are logged in as an <strong>Agent</strong>. Only managers can create projects.
-        </div>
-      )}
 
       {showForm && isManager && (
         <div className="mb-6 bg-white rounded-xl p-5 border border-gray-100">
