@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -127,13 +127,32 @@ async def list_files(
         for pf, uploader_name in result.all()
     ]
 
+async def _resolve_user(request: Request, token: str | None = None, db: AsyncSession = Depends(get_db)) -> User:
+    from jose import jwt, JWTError
+    from app.config import settings
+    # prefer query param token (direct browser download), fall back to Authorization header
+    raw = token or request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    if not raw:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(raw, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id = int(payload.get("sub"))
+    except (JWTError, TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
 @router.get("/{project_id}/files/{file_id}/download")
 async def download_file(
     project_id: int,
     file_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(_resolve_user)
 ):
+
     await _get_project(project_id, db, current_user)
     result = await db.execute(select(ProjectFile).where(
         ProjectFile.id == file_id, ProjectFile.project_id == project_id
