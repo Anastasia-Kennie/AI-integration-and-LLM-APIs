@@ -496,23 +496,21 @@ export default function Chat() {
                     placeholder={uploading ? 'Uploading…' : `Message ${active.user.name}…`}
                     disabled={uploading}
                     className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50" />
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                      title="Attach file"
+                      className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-40">
+                      <Paperclip size={16} />
+                    </button>
+                    <button onClick={startRecording} disabled={uploading}
+                      title="Record voice message"
+                      className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-40">
+                      <Mic size={16} />
+                    </button>
                     <button onClick={sendMessage} disabled={!input.trim() || uploading}
                       className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors">
                       <Send size={14} /> Send
                     </button>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-                        title="Attach file"
-                        className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-40">
-                        <Paperclip size={16} />
-                      </button>
-                      <button onClick={startRecording} disabled={uploading}
-                        title="Record voice message"
-                        className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-40">
-                        <Mic size={16} />
-                      </button>
-                    </div>
                   </div>
                 </div>
               )}
