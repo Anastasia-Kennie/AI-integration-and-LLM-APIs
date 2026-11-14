@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  body {
+    @apply bg-[#f0f1f9] text-gray-800 font-sans;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-gray-300 rounded-full; }
+}
+
+@layer components {
+  /* Markdown table styling inside AI chat bubbles */
+  .prose table {
+    @apply w-full border-collapse text-sm my-3;
+  }
+  .prose thead tr {
+    @apply bg-indigo-50;
+  }
+  .prose th {
+    @apply px-3 py-2 text-left font-semibold text-gray-700 border border-gray-200;
+  }
+  .prose td {
+    @apply px-3 py-2 border border-gray-200 text-gray-700;
+  }
+  .prose tr:nth-child(even) td {
+    @apply bg-gray-50;
+  }
+  .prose p { @apply my-1; }
+  .prose ul, .prose ol { @apply my-1 pl-5; }
+  .prose li { @apply my-0.5; }
+  .prose h1, .prose h2, .prose h3 { @apply font-semibold text-gray-800 mt-3 mb-1; }
+  .prose code { @apply bg-gray-100 px-1 py-0.5 rounded text-xs font-mono; }
+  .prose pre { @apply bg-gray-100 p-3 rounded-lg my-2 overflow-x-hidden; }
+  .prose pre code { @apply bg-transparent p-0 whitespace-pre-wrap break-words; }
+  .prose strong { @apply font-semibold; }
+}
