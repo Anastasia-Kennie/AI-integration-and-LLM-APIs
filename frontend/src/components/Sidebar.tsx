@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { PhoneInput } from './PhoneInput'
 import { BirthdayPicker } from './BirthdayPicker'
+import AvatarComp from './Avatar'
 import clsx from 'clsx'
 
 const navMain = [
@@ -76,36 +77,7 @@ const WOMEN_AVATARS = [
   ['🕵️','374151'],['🧑‍🎯','0d9488'],['👩‍🏋️','b91c1c'],['🧜','1e40af'],['🧑‍⚕️','065f46'],
 ].map(([e, c]) => `local:${e}:${c}`)
 
-function LocalAvatar({ value, size = 14, ring = false }: { value: string; size?: number; ring?: boolean }) {
-  const [, emoji, color] = value.split(':')
-  const px = size * 4
-  return (
-    <div style={{
-      width: px, height: px, minWidth: px,
-      backgroundColor: `#${color}`,
-      borderRadius: '50%',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      outline: ring ? '2px solid #6366f1' : undefined,
-      outlineOffset: ring ? '2px' : undefined,
-    }}>
-      <span style={{ fontSize: px * 0.55, lineHeight: 1 }}>{emoji}</span>
-    </div>
-  )
-}
 
-function AvatarDisplay({ avatar, name, size = 14 }: { avatar?: string | null; name?: string; size?: number }) {
-  const px = size * 4
-  if (avatar?.startsWith('local:')) return <LocalAvatar value={avatar} size={size} />
-  if (avatar?.startsWith('http') || avatar?.startsWith('data:')) return (
-    <img src={avatar} style={{ width: px, height: px, minWidth: px }} className="rounded-full object-cover bg-gray-100 shrink-0" />
-  )
-  return (
-    <div style={{ width: px, height: px, minWidth: px, fontSize: px * 0.4 }}
-      className="rounded-full bg-primary-500 flex items-center justify-center text-white font-bold shrink-0">
-      {name?.[0]?.toUpperCase() ?? 'U'}
-    </div>
-  )
-}
 
 /* ── Main drawer ── */
 function ProfileDrawer({ onClose }: { onClose: () => void }) {
@@ -201,7 +173,7 @@ function ProfileDrawer({ onClose }: { onClose: () => void }) {
 
         {/* avatar hero row */}
         <div className="flex items-center gap-4 px-6 py-5 border-b border-gray-50">
-          <AvatarDisplay avatar={avatar} name={user?.name} size={14} />
+          <AvatarComp avatar={avatar} name={user?.name ?? ''} size={14} />
           <div>
             <p className="font-semibold text-gray-900">{user?.name}</p>
             <p className="text-xs text-gray-400 capitalize mt-0.5">{user?.role} · {user?.email}</p>
@@ -249,11 +221,12 @@ function ProfileDrawer({ onClose }: { onClose: () => void }) {
                   <div className="grid grid-cols-5 gap-1.5 p-2">
                     {(avatarTab === 'men' ? MEN_AVATARS : WOMEN_AVATARS).map(val => (
                       <button key={val} type="button" onClick={() => setAvatar(val)}
+                        style={{ outline: avatar === val ? '2px solid #6366f1' : undefined, outlineOffset: avatar === val ? '2px' : undefined }}
                         className={clsx(
                           'w-full aspect-square rounded-full overflow-hidden transition-all',
-                          avatar === val ? 'ring-2 ring-offset-1 ring-primary-500 scale-105' : 'opacity-80 hover:opacity-100 hover:scale-105'
+                          avatar === val ? 'scale-105' : 'opacity-80 hover:opacity-100 hover:scale-105'
                         )}>
-                        <LocalAvatar value={val} size={10} ring={avatar === val} />
+                        <AvatarComp name="" avatar={val} size={10} />
                       </button>
                     ))}
                   </div>
@@ -384,7 +357,7 @@ export default function Sidebar() {
         <NavItem to="#" icon={HelpCircle} label="Help & Support" />
         <div className="border-t border-gray-100 pt-2 mt-1">
           <div className="flex items-center gap-2 px-3 py-2">
-            <AvatarDisplay avatar={(user as any)?.avatar} name={user?.name} size={7} />
+            <AvatarComp avatar={(user as any)?.avatar} name={user?.name ?? ''} size={7} />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-gray-800 truncate">{user?.name}</p>
               <p className="text-[10px] text-gray-400 capitalize">{user?.role}</p>

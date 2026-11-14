@@ -3,12 +3,14 @@ import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { Users as UsersIcon, Search, ShieldCheck, UserCircle, Phone, MapPin, Globe, Cake, Mail, Calendar, ChevronDown, ChevronUp, Trash2, AlertTriangle } from 'lucide-react'
 import clsx from 'clsx'
+import AvatarComp from '../components/Avatar'
 
 interface UserRecord {
   id: number
   name: string
   email: string
   role: 'manager' | 'agent'
+  avatar?: string | null
   is_active: boolean
   is_approved: boolean
   phone_number: string | null
@@ -25,16 +27,6 @@ const ROLE_STYLE: Record<string, string> = {
   agent:   'bg-gray-50 text-gray-600 border border-gray-200',
 }
 
-function Avatar({ name, size = 8 }: { name: string; size?: number }) {
-  const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
-  const colors = ['bg-indigo-400','bg-violet-400','bg-sky-400','bg-teal-400','bg-amber-400','bg-rose-400']
-  const color = colors[name.charCodeAt(0) % colors.length]
-  return (
-    <div className={clsx(`w-${size} h-${size} rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0`, color)}>
-      {initials}
-    </div>
-  )
-}
 
 function Detail({ icon: Icon, value }: { icon: React.ElementType; value: string | null }) {
   if (!value) return null
@@ -181,7 +173,7 @@ export default function UsersPage() {
                   {/* member */}
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
-                      <Avatar name={u.name} size={9} />
+                      <AvatarComp name={u.name} avatar={u.avatar} size={9} />
                       <div>
                         <p className="text-sm font-semibold text-gray-900">{u.name}</p>
                         <p className="text-xs text-gray-400">ID #{u.id}</p>

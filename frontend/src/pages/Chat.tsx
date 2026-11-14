@@ -5,6 +5,7 @@ import api from '../services/api'
 import { WS_BASE } from '../lib/urls'
 import { Send, UserPlus, Check, X, Mail, Circle } from 'lucide-react'
 import clsx from 'clsx'
+import Avatar from '../components/Avatar'
 
 interface Contact {
   user: { id: number; name: string; email: string; role: string; avatar?: string }
@@ -40,15 +41,6 @@ function PresenceDot({ status }: { status: 'online' | 'away' | 'offline' }) {
   return <Circle size={8} className={clsx('fill-current shrink-0', PRESENCE_COLOR[status])} />
 }
 
-function AvatarCircle({ name, avatar, size = 8 }: { name: string; avatar?: string; size?: number }) {
-  if (avatar?.startsWith('http') || avatar?.startsWith('data:'))
-    return <img src={avatar} className={`w-${size} h-${size} rounded-full object-cover shrink-0 bg-gray-100`} />
-  return (
-    <div className={`w-${size} h-${size} rounded-full bg-primary-500 flex items-center justify-center text-white text-xs font-bold shrink-0`}>
-      {name?.[0]?.toUpperCase() ?? '?'}
-    </div>
-  )
-}
 
 export default function Chat() {
   const { user, token } = useAuth()
@@ -213,7 +205,7 @@ export default function Chat() {
                   : 'hover:bg-gray-50'
               )}>
               <div className="relative">
-                <AvatarCircle name={c.user.name} avatar={c.user.avatar} size={9} />
+                <Avatar name={c.user.name} avatar={c.user.avatar} size={9} />
                 <span className="absolute -bottom-0.5 -right-0.5">
                   <PresenceDot status={c.presence} />
                 </span>
@@ -233,7 +225,7 @@ export default function Chat() {
           <>
             <div className="bg-white border-b border-gray-100 px-5 py-3 flex items-center gap-3 shrink-0">
               <div className="relative">
-                <AvatarCircle name={active.user.name} avatar={active.user.avatar} size={9} />
+                <Avatar name={active.user.name} avatar={active.user.avatar} size={9} />
                 <span className="absolute -bottom-0.5 -right-0.5">
                   <PresenceDot status={active.presence} />
                 </span>
@@ -249,7 +241,7 @@ export default function Chat() {
                 const isMe = msg.sender_id === user?.id
                 return (
                   <div key={msg.id} className={clsx('flex gap-2', isMe ? 'flex-row-reverse' : 'flex-row')}>
-                    <AvatarCircle
+                    <Avatar
                       name={isMe ? (user?.name ?? '') : active.user.name}
                       avatar={isMe ? (user as any)?.avatar : active.user.avatar}
                       size={7}

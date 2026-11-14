@@ -121,6 +121,20 @@ class Ticket(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+class ProjectFile(Base):
+    __tablename__ = "project_files"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    uploader_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    filename = Column(String(255), nullable=False)
+    content_type = Column(String(100), nullable=False)
+    file_data = Column(Text, nullable=False)  # base64-encoded
+    file_size = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    project = relationship("Project")
+    uploader = relationship("User")
+
 class AIConversation(Base):
     __tablename__ = "ai_conversations"
     id = Column(Integer, primary_key=True, index=True)

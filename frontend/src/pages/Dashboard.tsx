@@ -11,6 +11,7 @@ import {
   ChevronRight, Calendar, UserCheck, UserX, Bell
 } from 'lucide-react'
 import clsx from 'clsx'
+import Avatar from '../components/Avatar'
 
 interface Stats {
   team_members: number
@@ -70,26 +71,6 @@ function StatCard({ icon: Icon, label, value, iconBg }: {
   )
 }
 
-function MemberAvatar({ avatar, name, size = 8 }: { avatar?: string | null; name: string; size?: number }) {
-  const px = size * 4
-  if (avatar?.startsWith('local:')) {
-    const [, emoji, color] = avatar.split(':')
-    return (
-      <div style={{ width: px, height: px, minWidth: px, backgroundColor: `#${color}`, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: px * 0.55, lineHeight: 1 }}>{emoji}</span>
-      </div>
-    )
-  }
-  if (avatar?.startsWith('http') || avatar?.startsWith('data:')) {
-    return <img src={avatar} style={{ width: px, height: px }} className="rounded-full object-cover bg-gray-100 shrink-0" />
-  }
-  return (
-    <div style={{ width: px, height: px, minWidth: px, fontSize: px * 0.4 }}
-      className="rounded-full bg-primary-500 flex items-center justify-center text-white font-bold shrink-0">
-      {name[0]?.toUpperCase() ?? 'U'}
-    </div>
-  )
-}
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -198,7 +179,7 @@ export default function Dashboard() {
                 onClick={() => navigate('/chat')}
                 className="flex items-center justify-between px-5 py-3 w-full text-left hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-3">
-                  <MemberAvatar avatar={room.contact.avatar} name={room.contact.name} size={9} />
+                  <Avatar avatar={room.contact.avatar} name={room.contact.name} size={9} />
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-gray-800">{room.contact.name}</p>
                     <p className="text-xs text-gray-400 truncate max-w-[300px]">{room.last_message}</p>
@@ -271,7 +252,7 @@ export default function Dashboard() {
             {members.map(m => (
               <div key={m.id} className="flex items-center gap-2.5">
                 <div className="relative shrink-0">
-                  <MemberAvatar avatar={m.avatar} name={m.name} size={8} />
+                  <Avatar avatar={m.avatar} name={m.name} size={8} />
                   <span className={clsx('absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white', STATUS_COLOR[m.status])} />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -310,7 +291,7 @@ export default function Dashboard() {
             <div className="space-y-3">
               {activity.map(msg => (
                 <div key={msg.id} className="flex items-start gap-3">
-                  <MemberAvatar avatar={msg.sender_avatar} name={msg.sender_name} size={8} />
+                  <Avatar avatar={msg.sender_avatar} name={msg.sender_name} size={8} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2">
                       <span className="text-xs font-semibold text-gray-800">{msg.sender_name}</span>
