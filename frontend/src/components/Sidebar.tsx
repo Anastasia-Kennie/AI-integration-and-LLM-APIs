@@ -90,9 +90,9 @@ const bgMen   = 'b6e3f4,c0aede,d1d4f9,e0f2fe,dbeafe'
 const bgWomen = 'ffd5dc,ffdfbf,fce7f3,f5d0fe,ede9fe'
 
 const MEN_AVATARS   = MEN_SEEDS.map(s =>
-  `https://api.dicebear.com/8.x/adventurer/svg?seed=${s}&backgroundColor=${bgMen}&backgroundType=gradientLinear`)
+  `https://api.dicebear.com/9.x/adventurer/svg?seed=${s}&backgroundColor=${bgMen}&backgroundType=gradientLinear`)
 const WOMEN_AVATARS = WOMEN_SEEDS.map(s =>
-  `https://api.dicebear.com/8.x/adventurer/svg?seed=${s}&backgroundColor=${bgWomen}&backgroundType=gradientLinear`)
+  `https://api.dicebear.com/9.x/adventurer/svg?seed=${s}&backgroundColor=${bgWomen}&backgroundType=gradientLinear`)
 
 function AvatarDisplay({ avatar, name, size = 14 }: { avatar?: string | null; name?: string; size?: number }) {
   if (avatar?.startsWith('http') || avatar?.startsWith('data:')) return (
