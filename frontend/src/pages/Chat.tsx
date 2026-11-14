@@ -489,27 +489,29 @@ export default function Chat() {
                   </button>
                 </div>
               ) : (
-                /* Normal state — single row */
-                <div className="flex items-center gap-2">
-                  <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-                    title="Attach file"
-                    className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-40 shrink-0">
-                    <Paperclip size={16} />
-                  </button>
-                  <button onClick={startRecording} disabled={uploading}
-                    title="Record voice message"
-                    className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-40 shrink-0">
-                    <Mic size={16} />
-                  </button>
+                /* Normal state — input row + toolbar row */
+                <div className="flex flex-col gap-2">
                   <input type="text" value={input} onChange={e => setInput(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
                     placeholder={uploading ? 'Uploading…' : `Message ${active.user.name}…`}
                     disabled={uploading}
-                    className="flex-1 px-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50" />
-                  <button onClick={sendMessage} disabled={!input.trim() || uploading}
-                    className="p-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors shrink-0">
-                    <Send size={16} />
-                  </button>
+                    className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50" />
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                      title="Attach file"
+                      className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-40">
+                      <Paperclip size={16} />
+                    </button>
+                    <button onClick={startRecording} disabled={uploading}
+                      title="Record voice message"
+                      className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-40">
+                      <Mic size={16} />
+                    </button>
+                    <button onClick={sendMessage} disabled={!input.trim() || uploading}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors">
+                      <Send size={14} /> Send
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

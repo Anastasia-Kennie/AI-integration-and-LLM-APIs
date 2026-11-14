@@ -150,7 +150,7 @@ export default function Dashboard() {
   const onlineCount = members.filter(m => m.status === 'online').length
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto overflow-y-auto flex-1">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

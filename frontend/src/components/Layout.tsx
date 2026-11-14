@@ -7,7 +7,7 @@ export default function Layout() {
     <PresenceProvider>
       <div className="flex h-screen overflow-hidden bg-[#f0f1f9]">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-hidden flex flex-col">
           <Outlet />
         </main>
       </div>

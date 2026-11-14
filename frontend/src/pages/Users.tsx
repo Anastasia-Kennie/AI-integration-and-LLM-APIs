@@ -100,7 +100,7 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto overflow-y-auto flex-1">
       {/* header */}
       <div className="flex items-center justify-between mb-6">
         <div>
