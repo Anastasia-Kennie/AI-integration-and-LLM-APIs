@@ -34,6 +34,8 @@ async def seed_admin():
                 email="petegrizk.engineer@gmail.com",
                 hashed_password=get_password_hash("1234567890"),
                 role="manager",
+                is_approved=True,
+                is_active=True,
             )
             db.add(admin)
             await db.commit()
