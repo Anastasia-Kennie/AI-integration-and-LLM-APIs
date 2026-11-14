@@ -4,37 +4,57 @@ import { usePresence } from '../contexts/PresenceContext'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
-import { MessageSquare, Clock, CheckCircle, Timer, TrendingUp, TrendingDown, Sparkles, ChevronRight, Calendar, UserCheck, UserX, Bell } from 'lucide-react'
+import {
+  MessageSquare, Users, FolderOpen, Sparkles,
+  ChevronRight, Calendar, UserCheck, UserX, Bell
+} from 'lucide-react'
 import clsx from 'clsx'
 
 interface Stats {
-  open_conversations: number
-  waiting_for_reply: number
-  resolved_today: number
-  avg_response_time: string
-  open_change: number
-  waiting_change: number
-  resolved_change: number
-  response_change: number
+  team_members: number
+  messages_today: number
+  active_chats: number
+  projects: number
 }
 
-interface VolumeData { day: string; incoming: number; resolved: number }
-interface CategoryData { category: string; count: number; color: string }
-interface SatisfactionData { percentage: number; happy: number; neutral: number; unhappy: number }
-interface Ticket { id: number; customer_name: string; subject: string; channel: string; status: string; time: string }
+interface VolumeData { day: string; messages: number }
 
-const STATUS_STYLES: Record<string, string> = {
-  open: 'bg-indigo-50 text-indigo-600',
-  resolved: 'bg-green-50 text-green-600',
-  pending: 'bg-amber-50 text-amber-600',
+interface OnlineMember {
+  id: number
+  name: string
+  avatar: string | null
+  role: string
+  status: 'online' | 'away' | 'offline'
 }
 
-function StatCard({ icon: Icon, label, value, change, iconBg }: {
-  icon: React.ElementType; label: string; value: string | number; change: number; iconBg: string
+interface RecentMessage {
+  id: number
+  sender_name: string
+  sender_avatar: string | null
+  room_name: string
+  content: string
+  time: string
+}
+
+interface PendingUser {
+  id: number
+  name: string
+  email: string
+  role: string
+  created_at: string
+}
+
+const STATUS_COLOR: Record<string, string> = {
+  online: 'bg-green-500',
+  away:   'bg-amber-400',
+  offline:'bg-gray-300',
+}
+
+function StatCard({ icon: Icon, label, value, iconBg }: {
+  icon: React.ElementType; label: string; value: string | number; iconBg: string
 }) {
-  const up = change >= 0
   return (
     <div className="bg-white rounded-xl p-5 border border-gray-100">
       <div className="flex items-start justify-between">
@@ -46,36 +66,39 @@ function StatCard({ icon: Icon, label, value, change, iconBg }: {
           <Icon size={18} />
         </div>
       </div>
-      <div className="flex items-center gap-1 mt-3">
-        {up
-          ? <TrendingUp size={13} className="text-green-500" />
-          : <TrendingDown size={13} className="text-red-500" />}
-        <span className={clsx('text-xs font-semibold', up ? 'text-green-500' : 'text-red-500')}>
-          {up ? '+' : ''}{change}%
-        </span>
-        <span className="text-xs text-gray-400">vs yesterday</span>
-      </div>
     </div>
   )
 }
 
-interface PendingUser {
-  id: number
-  name: string
-  email: string
-  role: string
-  created_at: string
+function MemberAvatar({ avatar, name, size = 8 }: { avatar?: string | null; name: string; size?: number }) {
+  const px = size * 4
+  if (avatar?.startsWith('local:')) {
+    const [, emoji, color] = avatar.split(':')
+    return (
+      <div style={{ width: px, height: px, minWidth: px, backgroundColor: `#${color}`, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: px * 0.55, lineHeight: 1 }}>{emoji}</span>
+      </div>
+    )
+  }
+  if (avatar?.startsWith('http') || avatar?.startsWith('data:')) {
+    return <img src={avatar} style={{ width: px, height: px }} className="rounded-full object-cover bg-gray-100 shrink-0" />
+  }
+  return (
+    <div style={{ width: px, height: px, minWidth: px, fontSize: px * 0.4 }}
+      className="rounded-full bg-primary-500 flex items-center justify-center text-white font-bold shrink-0">
+      {name[0]?.toUpperCase() ?? 'U'}
+    </div>
+  )
 }
 
 export default function Dashboard() {
   const { user } = useAuth()
   const { unreadRooms } = usePresence()
   const navigate = useNavigate()
-  const [stats, setStats] = useState<Stats | null>(null)
-  const [volume, setVolume] = useState<VolumeData[]>([])
-  const [categories, setCategories] = useState<CategoryData[]>([])
-  const [satisfaction, setSatisfaction] = useState<SatisfactionData | null>(null)
-  const [tickets, setTickets] = useState<Ticket[]>([])
+  const [stats, setStats]       = useState<Stats | null>(null)
+  const [volume, setVolume]     = useState<VolumeData[]>([])
+  const [members, setMembers]   = useState<OnlineMember[]>([])
+  const [activity, setActivity] = useState<RecentMessage[]>([])
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([])
 
   const fetchPending = () => {
@@ -99,22 +122,19 @@ export default function Dashboard() {
     Promise.all([
       api.get('/api/dashboard/stats'),
       api.get('/api/dashboard/conversation-volume'),
-      api.get('/api/dashboard/tickets-by-category'),
-      api.get('/api/dashboard/satisfaction'),
-      api.get('/api/dashboard/recent-tickets'),
-    ]).then(([s, v, c, sat, t]) => {
-      setStats(s.data); setVolume(v.data); setCategories(c.data)
-      setSatisfaction(sat.data); setTickets(t.data)
+      api.get('/api/dashboard/online-members'),
+      api.get('/api/dashboard/recent-activity'),
+    ]).then(([s, v, m, a]) => {
+      setStats(s.data)
+      setVolume(v.data)
+      setMembers(m.data)
+      setActivity(a.data)
     })
   }, [])
 
-  const maxCount = Math.max(...categories.map(c => c.count), 1)
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
-
-  const radius = 44
-  const circumference = 2 * Math.PI * radius
-  const arc = satisfaction ? (satisfaction.percentage / 100) * circumference : 0
+  const onlineCount = members.filter(m => m.status === 'online').length
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -122,18 +142,11 @@ export default function Dashboard() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{greeting}, {user?.name}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Here's what's happening with your support team today.</p>
-        </div>
-        <div className="relative">
-          <input type="text" placeholder="Search customers..."
-            className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white w-56" />
-          <svg className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+          <p className="text-sm text-gray-500 mt-0.5">Here's what's happening with your team today.</p>
         </div>
       </div>
 
-      {/* Pending approvals — managers only */}
+      {/* Pending approvals */}
       {user?.role === 'manager' && pendingUsers.length > 0 && (
         <div className="mb-6 bg-white rounded-xl border border-amber-200 overflow-hidden">
           <div className="flex items-center gap-2 px-5 py-3 bg-amber-50 border-b border-amber-100">
@@ -185,13 +198,7 @@ export default function Dashboard() {
                 onClick={() => navigate('/chat')}
                 className="flex items-center justify-between px-5 py-3 w-full text-left hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-3">
-                  {room.contact.avatar?.startsWith('http') || room.contact.avatar?.startsWith('data:') ? (
-                    <img src={room.contact.avatar} className="w-9 h-9 rounded-full object-cover bg-gray-100 shrink-0" />
-                  ) : (
-                    <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 text-sm font-bold shrink-0">
-                      {room.contact.name[0].toUpperCase()}
-                    </div>
-                  )}
+                  <MemberAvatar avatar={room.contact.avatar} name={room.contact.name} size={9} />
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-gray-800">{room.contact.name}</p>
                     <p className="text-xs text-gray-400 truncate max-w-[300px]">{room.last_message}</p>
@@ -216,10 +223,10 @@ export default function Dashboard() {
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {stats && <>
-          <StatCard icon={MessageSquare} label="Open conversations" value={stats.open_conversations} change={stats.open_change} iconBg="bg-indigo-50 text-indigo-500" />
-          <StatCard icon={Clock} label="Waiting for reply" value={stats.waiting_for_reply} change={stats.waiting_change} iconBg="bg-amber-50 text-amber-500" />
-          <StatCard icon={CheckCircle} label="Resolved today" value={stats.resolved_today} change={stats.resolved_change} iconBg="bg-green-50 text-green-500" />
-          <StatCard icon={Timer} label="Avg. response time" value={stats.avg_response_time} change={stats.response_change} iconBg="bg-blue-50 text-blue-500" />
+          <StatCard icon={Users}        label="Team members"   value={stats.team_members}   iconBg="bg-indigo-50 text-indigo-500" />
+          <StatCard icon={MessageSquare} label="Messages today" value={stats.messages_today} iconBg="bg-amber-50 text-amber-500" />
+          <StatCard icon={MessageSquare} label="Chat rooms"     value={stats.active_chats}   iconBg="bg-green-50 text-green-500" />
+          <StatCard icon={FolderOpen}   label="Projects"       value={stats.projects}       iconBg="bg-blue-50 text-blue-500" />
         </>}
       </div>
 
@@ -228,51 +235,53 @@ export default function Dashboard() {
         <div className="lg:col-span-2 bg-white rounded-xl p-5 border border-gray-100">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-sm font-semibold text-gray-800">Conversation Volume</h2>
-              <p className="text-xs text-gray-400">Incoming vs resolved conversations over the last 7 days.</p>
+              <h2 className="text-sm font-semibold text-gray-800">Message Volume</h2>
+              <p className="text-xs text-gray-400">Team messages sent over the last 7 days.</p>
             </div>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-500">
               <Calendar size={12} /> Last 7 days
-            </button>
+            </span>
           </div>
           <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={volume}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <BarChart data={volume} barSize={28}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
               <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
-              <Line type="monotone" dataKey="incoming" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Incoming" />
-              <Line type="monotone" dataKey="resolved" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} name="Resolved" />
-            </LineChart>
+              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} cursor={{ fill: '#f3f4f6' }} />
+              <Bar dataKey="messages" fill="#6366f1" radius={[4, 4, 0, 0]} name="Messages" />
+            </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* AI Activity */}
-        <div className="bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl p-5 text-white">
+        {/* Online now */}
+        <div className="bg-white rounded-xl p-5 border border-gray-100">
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Sparkles size={16} />
-              <span className="text-sm font-semibold">AI Activity</span>
+            <div>
+              <h2 className="text-sm font-semibold text-gray-800">Team Online</h2>
+              <p className="text-xs text-gray-400">{onlineCount} of {members.length} online now</p>
             </div>
-            <button className="text-xs text-white/70 hover:text-white flex items-center gap-1">
+            <button className="text-xs text-primary-600 hover:underline flex items-center gap-1" onClick={() => navigate('/users')}>
               View all <ChevronRight size={12} />
             </button>
           </div>
-          <div className="bg-white/15 rounded-xl p-4 backdrop-blur-sm">
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center shrink-0">
-                <Sparkles size={14} />
+          <div className="space-y-2.5 max-h-52 overflow-y-auto">
+            {members.length === 0 && (
+              <p className="text-xs text-gray-400 text-center py-4">No team members yet.</p>
+            )}
+            {members.map(m => (
+              <div key={m.id} className="flex items-center gap-2.5">
+                <div className="relative shrink-0">
+                  <MemberAvatar avatar={m.avatar} name={m.name} size={8} />
+                  <span className={clsx('absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white', STATUS_COLOR[m.status])} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-gray-800 truncate">{m.name}</p>
+                  <p className="text-[10px] text-gray-400 capitalize">{m.role}</p>
+                </div>
+                <span className={clsx('text-[10px] font-medium capitalize', m.status === 'online' ? 'text-green-600' : m.status === 'away' ? 'text-amber-500' : 'text-gray-400')}>
+                  {m.status}
+                </span>
               </div>
-              <div>
-                <p className="text-sm font-medium">Assigned Bessie Cooper to Theresa Webb</p>
-                <p className="text-xs text-white/60 mt-1">2m ago</p>
-              </div>
-            </div>
-          </div>
-          <div className="mt-3 flex justify-center gap-1.5">
-            {[0, 1, 2].map(i => (
-              <div key={i} className={clsx('h-1.5 rounded-full', i === 0 ? 'w-5 bg-white' : 'w-1.5 bg-white/40')} />
             ))}
           </div>
         </div>
@@ -280,101 +289,60 @@ export default function Dashboard() {
 
       {/* Bottom row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Recent conversations */}
+        {/* Recent messages */}
         <div className="lg:col-span-2 bg-white rounded-xl p-5 border border-gray-100">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-sm font-semibold text-gray-800">Recent Conversations</h2>
-              <p className="text-xs text-gray-400">Latest customer conversations</p>
+              <h2 className="text-sm font-semibold text-gray-800">Recent Messages</h2>
+              <p className="text-xs text-gray-400">Latest team messages across all chat rooms</p>
             </div>
-            <button className="text-xs text-primary-600 hover:underline flex items-center gap-1">
-              View all <ChevronRight size={12} />
+            <button className="text-xs text-primary-600 hover:underline flex items-center gap-1" onClick={() => navigate('/chat')}>
+              Open chat <ChevronRight size={12} />
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px]">
-              <thead>
-                <tr className="text-xs text-gray-400 border-b border-gray-100">
-                  {['Customer', 'Subject', 'Channel', 'Status', 'Time'].map(h => (
-                    <th key={h} className="text-left pb-2 font-medium">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {tickets.map(t => (
-                  <tr key={t.id} className="text-sm border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
-                    <td className="py-2.5 font-medium text-gray-800">{t.customer_name}</td>
-                    <td className="py-2.5 text-gray-500">{t.subject}</td>
-                    <td className="py-2.5 text-gray-500">{t.channel}</td>
-                    <td className="py-2.5">
-                      <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium capitalize', STATUS_STYLES[t.status] || 'bg-gray-100 text-gray-600')}>
-                        {t.status}
-                      </span>
-                    </td>
-                    <td className="py-2.5 text-gray-400">{t.time}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Right column */}
-        <div className="space-y-4">
-          {/* Tickets by category */}
-          <div className="bg-white rounded-xl p-5 border border-gray-100">
-            <h2 className="text-sm font-semibold text-gray-800 mb-1">Tickets by category</h2>
-            <p className="text-xs text-gray-400 mb-4">Distribution of support tickets</p>
+          {activity.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+              <MessageSquare size={28} className="mb-2 opacity-30" />
+              <p className="text-sm">No messages yet.</p>
+              <button onClick={() => navigate('/chat')} className="mt-2 text-xs text-primary-600 hover:underline">Start a conversation</button>
+            </div>
+          ) : (
             <div className="space-y-3">
-              {categories.map(cat => (
-                <div key={cat.category} className="flex items-center gap-3">
-                  <span className="text-xs text-gray-500 w-16 shrink-0">{cat.category}</span>
-                  <div className="flex-1 bg-gray-100 rounded-full h-2">
-                    <div className="h-2 rounded-full transition-all"
-                      style={{ width: `${(cat.count / maxCount) * 100}%`, backgroundColor: cat.color }} />
+              {activity.map(msg => (
+                <div key={msg.id} className="flex items-start gap-3">
+                  <MemberAvatar avatar={msg.sender_avatar} name={msg.sender_name} size={8} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs font-semibold text-gray-800">{msg.sender_name}</span>
+                      <span className="text-[10px] text-gray-400">in {msg.room_name}</span>
+                      <span className="text-[10px] text-gray-400 ml-auto shrink-0">{msg.time}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 truncate mt-0.5">{msg.content}</p>
                   </div>
-                  <span className="text-xs font-semibold text-gray-700 w-8 text-right">{cat.count}</span>
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* Customer satisfaction */}
-          {satisfaction && (
-            <div className="bg-white rounded-xl p-5 border border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-800 mb-1">Customer Satisfaction</h2>
-              <p className="text-xs text-gray-400 mb-4">How customers rated support this week</p>
-              <div className="flex items-center gap-4">
-                <div className="relative shrink-0">
-                  <svg width="100" height="100" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r={radius} fill="none" stroke="#f0f1f9" strokeWidth="10" />
-                    <circle cx="50" cy="50" r={radius} fill="none" stroke="#22c55e" strokeWidth="10"
-                      strokeDasharray={circumference} strokeDashoffset={circumference - arc}
-                      strokeLinecap="round" transform="rotate(-90 50 50)" />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-lg font-bold text-gray-900">{satisfaction.percentage}%</span>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {[
-                    { emoji: '😊', label: 'Happy', val: satisfaction.happy },
-                    { emoji: '😐', label: 'Neutral', val: satisfaction.neutral },
-                    { emoji: '😞', label: 'Unhappy', val: satisfaction.unhappy },
-                  ].map(r => (
-                    <div key={r.label} className="flex items-center gap-2">
-                      <span className="text-base">{r.emoji}</span>
-                      <span className="text-xs text-gray-500">{r.label}</span>
-                      <span className="text-xs font-bold text-gray-700 ml-auto">{r.val}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
           )}
         </div>
-      </div>
 
+        {/* AI quick-launch */}
+        <div className="bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl p-5 text-white flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles size={16} />
+              <span className="text-sm font-semibold">Ask AI</span>
+            </div>
+            <p className="text-sm text-white/80 leading-relaxed">
+              Get instant answers, draft replies, or analyse customer data — all from one AI chat.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/ai-chat')}
+            className="mt-6 w-full py-2.5 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
+            <Sparkles size={14} /> Open AI Chat
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

@@ -146,27 +146,18 @@ class AIMessageOut(BaseModel):
         from_attributes = True
 
 class DashboardStats(BaseModel):
-    open_conversations: int
-    waiting_for_reply: int
-    resolved_today: int
-    avg_response_time: str
-    open_change: float
-    waiting_change: float
-    resolved_change: float
-    response_change: float
+    team_members: int
+    messages_today: int
+    active_chats: int
+    projects: int
 
 class ConversationVolume(BaseModel):
     day: str
-    incoming: int
-    resolved: int
+    messages: int
 
-class TicketByCategory(BaseModel):
-    category: str
-    count: int
-    color: str
-
-class SatisfactionStats(BaseModel):
-    percentage: float
-    happy: int
-    neutral: int
-    unhappy: int
+class OnlineMember(BaseModel):
+    id: int
+    name: str
+    avatar: str | None
+    role: str
+    status: str

@@ -1,114 +1,130 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from datetime import datetime, date
+from sqlalchemy import select, func, cast, Date
+from datetime import datetime, date, timedelta, timezone
 from typing import List
 from app.database import get_db
-from app.models import Ticket, TicketStatus, User
-from app.schemas import DashboardStats, ConversationVolume, TicketByCategory, SatisfactionStats
+from app.models import User, ChatMessage, ChatRoom, Project, AIConversation
+from app.schemas import DashboardStats, ConversationVolume, OnlineMember
 from app.auth import get_current_user
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
-CATEGORY_COLORS = {
-    "Shipping": "#6366f1",
-    "Payment": "#22c55e",
-    "Refund": "#3b82f6",
-    "Order": "#f97316",
-    "Technical": "#06b6d4",
-    "Login": "#ec4899",
-}
 
 @router.get("/stats", response_model=DashboardStats)
 async def get_stats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    open_result = await db.execute(select(func.count(Ticket.id)).where(Ticket.status == TicketStatus.open))
-    open_count = open_result.scalar() or 0
+    members_result = await db.execute(
+        select(func.count(User.id)).where(User.is_active == True, User.is_approved == True)
+    )
+    team_members = members_result.scalar() or 0
 
-    waiting_result = await db.execute(select(func.count(Ticket.id)).where(Ticket.status == TicketStatus.pending))
-    waiting_count = waiting_result.scalar() or 0
-
-    resolved_result = await db.execute(
-        select(func.count(Ticket.id)).where(
-            Ticket.status == TicketStatus.resolved,
-            func.date(Ticket.updated_at) == date.today()
+    today = date.today()
+    msgs_result = await db.execute(
+        select(func.count(ChatMessage.id)).where(
+            cast(ChatMessage.created_at, Date) == today
         )
     )
-    resolved_count = resolved_result.scalar() or 0
+    messages_today = msgs_result.scalar() or 0
+
+    rooms_result = await db.execute(select(func.count(ChatRoom.id)))
+    active_chats = rooms_result.scalar() or 0
+
+    projects_result = await db.execute(
+        select(func.count(Project.id)).where(Project.is_active == True)
+    )
+    projects = projects_result.scalar() or 0
 
     return DashboardStats(
-        open_conversations=open_count or 128,
-        waiting_for_reply=waiting_count or 24,
-        resolved_today=resolved_count or 342,
-        avg_response_time="4m 12s",
-        open_change=12.0,
-        waiting_change=-8.0,
-        resolved_change=18.0,
-        response_change=-8.0,
+        team_members=team_members,
+        messages_today=messages_today,
+        active_chats=active_chats,
+        projects=projects,
     )
 
-@router.get("/conversation-volume", response_model=List[ConversationVolume])
-async def get_conversation_volume(current_user: User = Depends(get_current_user)):
-    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    incoming = [220, 280, 300, 460, 350, 110, 80]
-    resolved = [100, 230, 250, 310, 290, 100, 60]
-    return [ConversationVolume(day=days[i], incoming=incoming[i], resolved=resolved[i]) for i in range(7)]
 
-@router.get("/tickets-by-category", response_model=List[TicketByCategory])
-async def get_tickets_by_category(
+@router.get("/conversation-volume", response_model=List[ConversationVolume])
+async def get_conversation_volume(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    today = date.today()
+    result = await db.execute(
+        select(
+            cast(ChatMessage.created_at, Date).label("day"),
+            func.count(ChatMessage.id).label("messages"),
+        )
+        .where(ChatMessage.created_at >= datetime.combine(today - timedelta(days=6), datetime.min.time()))
+        .group_by(cast(ChatMessage.created_at, Date))
+        .order_by(cast(ChatMessage.created_at, Date))
+    )
+    rows = {row.day: row.messages for row in result.all()}
+
+    output = []
+    for i in range(6, -1, -1):
+        d = today - timedelta(days=i)
+        output.append(ConversationVolume(
+            day=d.strftime("%a"),
+            messages=rows.get(d, 0),
+        ))
+    return output
+
+
+@router.get("/online-members", response_model=List[OnlineMember])
+async def get_online_members(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.routers.chat import presence_status
+    result = await db.execute(
+        select(User).where(User.is_active == True, User.is_approved == True)
+        .order_by(User.last_seen.desc().nullslast())
+    )
+    users = result.scalars().all()
+    members = [
+        OnlineMember(id=u.id, name=u.name, avatar=u.avatar, role=u.role, status=presence_status(u))
+        for u in users
+    ]
+    members.sort(key=lambda m: (0 if m.status == "online" else 1 if m.status == "away" else 2))
+    return members
+
+
+@router.get("/recent-activity")
+async def get_recent_activity(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     result = await db.execute(
-        select(Ticket.category, func.count(Ticket.id).label("count"))
-        .group_by(Ticket.category)
-        .order_by(func.count(Ticket.id).desc())
+        select(ChatMessage, User.name.label("sender_name"), User.avatar.label("sender_avatar"), ChatRoom.name.label("room_name"))
+        .join(User, ChatMessage.sender_id == User.id)
+        .join(ChatRoom, ChatMessage.room_id == ChatRoom.id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(10)
     )
     rows = result.all()
-
-    if not rows:
-        default = [
-            ("Shipping", 128), ("Payment", 86), ("Refund", 64),
-            ("Order", 52), ("Technical", 41), ("Login", 28),
-        ]
-        return [TicketByCategory(category=c, count=n, color=CATEGORY_COLORS.get(c, "#6366f1")) for c, n in default]
-
-    return [
-        TicketByCategory(category=row.category, count=row.count, color=CATEGORY_COLORS.get(row.category, "#6366f1"))
-        for row in rows
-    ]
-
-@router.get("/satisfaction", response_model=SatisfactionStats)
-async def get_satisfaction(current_user: User = Depends(get_current_user)):
-    return SatisfactionStats(percentage=94.0, happy=218, neutral=12, unhappy=8)
-
-@router.get("/recent-tickets")
-async def get_recent_tickets(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    result = await db.execute(select(Ticket).order_by(Ticket.created_at.desc()).limit(10))
-    tickets = result.scalars().all()
-
-    if not tickets:
-        return [
-            {"id": 1, "customer_name": "Bessie Cooper", "subject": "Where is my order?", "channel": "WhatsApp", "status": "open", "time": "2m ago"},
-            {"id": 2, "customer_name": "Brooklyn Simmons", "subject": "Payment failed", "channel": "Website", "status": "resolved", "time": "8m ago"},
-            {"id": 3, "customer_name": "Eleanor Pena", "subject": "Refund request", "channel": "Email", "status": "pending", "time": "14m ago"},
-            {"id": 4, "customer_name": "Darlene Robertson", "subject": "Can't login", "channel": "WhatsApp", "status": "open", "time": "21m ago"},
-        ]
-
-    now = datetime.utcnow()
-    return [
-        {
-            "id": t.id,
-            "customer_name": t.customer_name,
-            "subject": t.subject,
-            "channel": t.channel,
-            "status": t.status,
-            "time": f"{(now - t.created_at.replace(tzinfo=None)).seconds // 60}m ago",
-        }
-        for t in tickets
-    ]
+    now = datetime.now(timezone.utc)
+    output = []
+    for msg, sender_name, sender_avatar, room_name in rows:
+        created = msg.created_at
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        diff = int((now - created).total_seconds())
+        if diff < 60:
+            time_str = f"{diff}s ago"
+        elif diff < 3600:
+            time_str = f"{diff // 60}m ago"
+        elif diff < 86400:
+            time_str = f"{diff // 3600}h ago"
+        else:
+            time_str = f"{diff // 86400}d ago"
+        output.append({
+            "id": msg.id,
+            "sender_name": sender_name,
+            "sender_avatar": sender_avatar,
+            "room_name": room_name,
+            "content": msg.content[:80],
+            "time": time_str,
+        })
+    return output
