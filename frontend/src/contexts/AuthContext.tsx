@@ -54,6 +54,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const logout = () => {
+    // Tell the backend to mark us offline before clearing state
+    api.post('/api/auth/logout').catch(() => {})
     localStorage.removeItem('token')
     delete api.defaults.headers.common['Authorization']
     setToken(null)

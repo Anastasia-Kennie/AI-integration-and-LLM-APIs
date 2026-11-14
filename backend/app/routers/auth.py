@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from datetime import datetime, timezone
 from app.database import get_db
 from app.models import User
 from app.schemas import UserCreate, UserOut, Token, LoginRequest
@@ -56,6 +57,25 @@ async def login(credentials: LoginRequest, db: AsyncSession = Depends(get_db)):
 
     token = create_access_token({"sub": str(user.id)})
     return {"access_token": token, "token_type": "bearer", "user": user}
+
+@router.post("/logout")
+async def logout(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Set last_seen to epoch so presence_status immediately returns "offline"
+    current_user.last_seen = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    await db.commit()
+
+    # Notify all other connected users that presence changed
+    from app.routers.chat import notify_user, presence_sockets, online_user_ids
+    online_user_ids.discard(current_user.id)
+    for uid in list(presence_sockets.keys()):
+        if uid != current_user.id:
+            await notify_user(uid, {"type": "presence_changed"})
+
+    return {"message": "Logged out"}
+
 
 @router.get("/me", response_model=UserOut)
 async def me(current_user: User = Depends(get_current_user)):
