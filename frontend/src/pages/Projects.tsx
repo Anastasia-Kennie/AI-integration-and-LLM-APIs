@@ -89,11 +89,24 @@ export default function Projects() {
   }
 
   async function downloadFile(pf: ProjectFile) {
-    const res = await api.get(`/api/projects/${selected!.id}/files/${pf.id}/download`, { responseType: 'blob' })
-    const url = URL.createObjectURL(res.data)
-    const a = document.createElement('a')
-    a.href = url; a.download = pf.filename; a.click()
-    URL.revokeObjectURL(url)
+    try {
+      const token = localStorage.getItem('token')
+      const base = (import.meta as any).env?.VITE_API_URL ?? ''
+      const url = `${base}/api/projects/${selected!.id}/files/${pf.id}/download`
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) throw new Error('Download failed')
+      const blob = await res.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = objectUrl
+      a.download = pf.filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+    } catch {
+      alert('Download failed. Please try again.')
+    }
   }
 
   async function deleteFile(fileId: number) {
