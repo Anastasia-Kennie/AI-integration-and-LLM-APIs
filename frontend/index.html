@@ -9,8 +9,9 @@
       /* Hide the Netlify "Powered by Netlify" badge injected on free-tier sites */
       [data-netlify-badge],
       #netlify-identity-widget,
-      a[href*="netlify.com"][style*="position:fixed"],
-      a[href*="netlify.com"][style*="position: fixed"] { display: none !important; }
+      a[href*="netlify.com"][style*="position"],
+      div[style*="position: fixed"][style*="netlify"],
+      iframe[src*="netlify.com"] { display: none !important; visibility: hidden !important; }
     </style>
   </head>
   <body>
