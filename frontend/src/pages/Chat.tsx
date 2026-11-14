@@ -3,7 +3,10 @@ import { useAuth } from '../contexts/AuthContext'
 import { usePresence } from '../contexts/PresenceContext'
 import api from '../services/api'
 import { WS_BASE } from '../lib/urls'
-import { Send, UserPlus, Check, X, Mail, Circle, Trash2 } from 'lucide-react'
+import {
+  Send, UserPlus, Check, X, Mail, Circle, Trash2,
+  Paperclip, Mic, StopCircle, Download, FileText,
+} from 'lucide-react'
 import clsx from 'clsx'
 import Avatar from '../components/Avatar'
 
@@ -28,6 +31,9 @@ interface Message {
   sender_id: number
   sender_name: string
   content: string
+  file_name?: string | null
+  file_content_type?: string | null
+  file_size?: number | null
   created_at: string
 }
 
@@ -39,6 +45,21 @@ const PRESENCE_COLOR = {
 
 function PresenceDot({ status }: { status: 'online' | 'away' | 'offline' }) {
   return <Circle size={8} className={clsx('fill-current shrink-0', PRESENCE_COLOR[status])} />
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1_048_576) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1_048_576).toFixed(1)} MB`
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = () => resolve((reader.result as string).split(',')[1])
+    reader.onerror = reject
+  })
 }
 
 export default function Chat() {
@@ -56,8 +77,24 @@ export default function Chat() {
   const [remaining,      setRemaining]      = useState<number | null>(null)
   const [hoverContact,   setHoverContact]   = useState<number | null>(null)
   const [deleteConfirm,  setDeleteConfirm]  = useState<Contact | null>(null)
-  const ws        = useRef<WebSocket | null>(null)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const [uploading,      setUploading]      = useState(false)
+  const [recording,      setRecording]      = useState(false)
+  const [recTime,        setRecTime]        = useState(0)
+
+  const ws              = useRef<WebSocket | null>(null)
+  const bottomRef       = useRef<HTMLDivElement>(null)
+  const fileInputRef    = useRef<HTMLInputElement>(null)
+  const mediaRecRef     = useRef<MediaRecorder | null>(null)
+  const audioChunksRef  = useRef<Blob[]>([])
+  const recTimerRef     = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // cleanup recorder/timer on unmount
+  useEffect(() => {
+    return () => {
+      if (recTimerRef.current) clearInterval(recTimerRef.current)
+      mediaRecRef.current?.stop()
+    }
+  }, [])
 
   const loadContacts = useCallback(() => {
     api.get('/api/chat/contacts').then(r => setContacts(r.data)).catch(() => {})
@@ -109,6 +146,117 @@ export default function Chat() {
     setInput('')
   }
 
+  async function sendFile(file: File) {
+    if (!active) return
+    setUploading(true)
+    try {
+      const base64 = await fileToBase64(file)
+      await api.post(`/api/chat/rooms/${active.room_id}/attachments`, {
+        file_data: base64,
+        file_name: file.name,
+        file_content_type: file.type || 'application/octet-stream',
+        file_size: file.size,
+        content: '',
+      })
+      // UI update comes via WebSocket broadcast
+    } catch {
+      // If WS is down, reload messages as fallback
+      api.get(`/api/chat/rooms/${active.room_id}/messages`).then(r => {
+        setMessages(r.data.map((m: any) => ({ ...m, sender_name: m.sender?.name ?? 'Unknown' })))
+      }).catch(() => {})
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream)
+      mediaRecRef.current = mr
+      audioChunksRef.current = []
+      mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        const mimeType = mr.mimeType || 'audio/webm'
+        const ext = mimeType.includes('mp4') ? 'm4a' : 'webm'
+        const blob = new Blob(audioChunksRef.current, { type: mimeType })
+        const file = new File([blob], `voice_${Date.now()}.${ext}`, { type: mimeType })
+        await sendFile(file)
+      }
+      mr.start()
+      setRecording(true)
+      setRecTime(0)
+      recTimerRef.current = setInterval(() => setRecTime(t => t + 1), 1000)
+    } catch {
+      alert('Microphone access denied. Please allow microphone access and try again.')
+    }
+  }
+
+  function stopRecording() {
+    mediaRecRef.current?.stop()
+    setRecording(false)
+    setRecTime(0)
+    if (recTimerRef.current) clearInterval(recTimerRef.current)
+  }
+
+  function getFileUrl(msg: Message): string {
+    const base = import.meta.env.VITE_API_URL ?? ''
+    const t = localStorage.getItem('token') ?? ''
+    return `${base}/api/chat/rooms/${msg.room_id}/messages/${msg.id}/download?token=${encodeURIComponent(t)}`
+  }
+
+  function downloadFile(msg: Message) {
+    const a = document.createElement('a')
+    a.href = getFileUrl(msg)
+    a.download = msg.file_name!
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  }
+
+  function renderMsgContent(msg: Message, isMe: boolean) {
+    if (msg.file_name) {
+      const isAudio = msg.file_content_type?.startsWith('audio/')
+      const fileUrl = getFileUrl(msg)
+
+      if (isAudio) {
+        return (
+          <div className="min-w-[220px]">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Mic size={13} className={isMe ? 'text-white/70' : 'text-gray-400'} />
+              <span className={clsx('text-[11px]', isMe ? 'text-white/70' : 'text-gray-400')}>
+                Voice · {msg.file_size ? formatBytes(msg.file_size) : ''}
+              </span>
+            </div>
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <audio controls src={fileUrl} className="w-full max-w-[260px] h-9" />
+          </div>
+        )
+      }
+
+      return (
+        <div className="flex items-center gap-2 min-w-[180px] max-w-[260px]">
+          <FileText size={22} className={isMe ? 'text-white/80' : 'text-gray-400'} />
+          <div className="flex-1 min-w-0">
+            <p className={clsx('text-xs font-medium truncate', isMe ? 'text-white' : 'text-gray-800')}>
+              {msg.file_name}
+            </p>
+            {msg.file_size != null && (
+              <p className={clsx('text-[10px]', isMe ? 'text-white/60' : 'text-gray-400')}>
+                {formatBytes(msg.file_size)}
+              </p>
+            )}
+          </div>
+          <button onClick={() => downloadFile(msg)} title="Download"
+            className={clsx('p-1.5 rounded-lg transition-colors shrink-0',
+              isMe ? 'text-white/80 hover:bg-white/20' : 'text-gray-500 hover:bg-gray-100')}>
+            <Download size={14} />
+          </button>
+        </div>
+      )
+    }
+    return <span>{msg.content}</span>
+  }
+
   async function sendInvite() {
     setInviteErr('')
     try {
@@ -140,6 +288,7 @@ export default function Chat() {
 
   const unreadByRoom = Object.fromEntries(unreadRooms.map(r => [r.room_id, r.unread_count]))
   const fmt = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const recFmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
   return (
     <div className="flex h-full">
@@ -177,7 +326,7 @@ export default function Chat() {
             {inviteErr  && <p className="mt-1 text-xs text-red-500">{inviteErr}</p>}
             {inviteSent && <p className="mt-1 text-xs text-green-600">✓ Invitation sent!</p>}
             {remaining === 0
-              ? <p className="mt-2 text-xs text-red-500 text-center">No invitations left today. Try again tomorrow.</p>
+              ? <p className="mt-2 text-xs text-red-500 text-center">No invitations left today.</p>
               : (
                 <button onClick={sendInvite} disabled={!inviteEmail.trim()}
                   className="mt-2 w-full py-1.5 bg-primary-600 text-white text-xs rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors">
@@ -256,7 +405,6 @@ export default function Chat() {
                     </span>
                   )}
                 </button>
-                {/* Delete button — visible on hover */}
                 {hoverContact === c.invitation_id && (
                   <button
                     onClick={e => { e.stopPropagation(); setDeleteConfirm(c) }}
@@ -275,6 +423,7 @@ export default function Chat() {
       <div className="flex-1 flex flex-col bg-[#f8f9ff] min-w-0">
         {active ? (
           <>
+            {/* Header */}
             <div className="bg-white border-b border-gray-100 px-5 py-3 flex items-center gap-3 shrink-0">
               <div className="relative">
                 <Avatar name={active.user.name} avatar={active.user.avatar} size={9} />
@@ -288,6 +437,7 @@ export default function Chat() {
               </div>
             </div>
 
+            {/* Messages */}
             <div className="flex-1 overflow-y-auto p-5 space-y-3">
               {messages.map(msg => {
                 const isMe = msg.sender_id === user?.id
@@ -307,7 +457,7 @@ export default function Chat() {
                         isMe
                           ? 'bg-primary-600 text-white rounded-tr-sm'
                           : 'bg-white border border-gray-100 text-gray-800 rounded-tl-sm')}>
-                        {msg.content}
+                        {renderMsgContent(msg, isMe)}
                       </div>
                     </div>
                   </div>
@@ -316,17 +466,52 @@ export default function Chat() {
               <div ref={bottomRef} />
             </div>
 
+            {/* Input bar */}
             <div className="bg-white border-t border-gray-100 p-3 shrink-0">
-              <div className="flex items-center gap-2">
-                <input type="text" value={input} onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                  placeholder={`Message ${active.user.name}…`}
-                  className="flex-1 px-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" />
-                <button onClick={sendMessage} disabled={!input.trim()}
-                  className="p-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors">
-                  <Send size={16} />
-                </button>
-              </div>
+              {/* Hidden file input */}
+              <input type="file" ref={fileInputRef} className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0]
+                  if (f) sendFile(f)
+                  e.target.value = ''
+                }} />
+
+              {recording ? (
+                /* Recording state */
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 flex items-center gap-2 px-4 py-2.5 bg-red-50 border border-red-100 rounded-lg">
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+                    <span className="text-sm text-red-600 font-medium">Recording {recFmt(recTime)}</span>
+                  </div>
+                  <button onClick={stopRecording} title="Stop and send"
+                    className="p-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
+                    <StopCircle size={16} />
+                  </button>
+                </div>
+              ) : (
+                /* Normal state */
+                <div className="flex items-center gap-2">
+                  <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                    title="Attach file"
+                    className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-40">
+                    <Paperclip size={16} />
+                  </button>
+                  <button onClick={startRecording} disabled={uploading}
+                    title="Record voice message"
+                    className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-40">
+                    <Mic size={16} />
+                  </button>
+                  <input type="text" value={input} onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                    placeholder={uploading ? 'Uploading…' : `Message ${active.user.name}…`}
+                    disabled={uploading}
+                    className="flex-1 px-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50" />
+                  <button onClick={sendMessage} disabled={!input.trim() || uploading}
+                    className="p-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors">
+                    <Send size={16} />
+                  </button>
+                </div>
+              )}
             </div>
           </>
         ) : (

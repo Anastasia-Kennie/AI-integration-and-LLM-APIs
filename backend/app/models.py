@@ -103,7 +103,11 @@ class ChatMessage(Base):
     id = Column(Integer, primary_key=True, index=True)
     room_id = Column(Integer, ForeignKey("chat_rooms.id"), nullable=False)
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    content = Column(Text, nullable=False)
+    content = Column(Text, nullable=False, default="")
+    file_data = Column(Text, nullable=True)          # base64-encoded
+    file_name = Column(String(255), nullable=True)
+    file_content_type = Column(String(100), nullable=True)
+    file_size = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     room = relationship("ChatRoom", back_populates="messages")

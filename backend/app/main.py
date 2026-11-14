@@ -45,9 +45,26 @@ async def seed_admin():
             existing.role = "manager"
         await db.commit()
 
+async def migrate_db():
+    from sqlalchemy import text
+    async with AsyncSessionLocal() as db:
+        try:
+            stmts = [
+                "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS file_data TEXT",
+                "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS file_name VARCHAR(255)",
+                "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS file_content_type VARCHAR(100)",
+                "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS file_size INTEGER",
+            ]
+            for s in stmts:
+                await db.execute(text(s))
+            await db.commit()
+        except Exception:
+            await db.rollback()
+
 @app.on_event("startup")
 async def startup():
     await create_tables()
+    await migrate_db()
     await seed_admin()
 
 @app.get("/")

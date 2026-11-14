@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException, Request
+from fastapi.responses import Response as HTTPResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, delete as sql_delete
 from sqlalchemy.orm import selectinload
@@ -6,7 +7,7 @@ from typing import List, Dict
 from datetime import datetime, timezone
 from app.database import get_db, AsyncSessionLocal
 from app.models import ChatRoom, ChatMessage, User, DirectInvitation, RoomLastRead
-from app.schemas import ChatRoomOut, ChatMessageOut, ContactOut, UnreadRoomOut
+from app.schemas import ChatRoomOut, ChatMessageOut, ContactOut, UnreadRoomOut, ChatFileUpload
 from sqlalchemy import func as sqlfunc
 from app.auth import get_current_user
 import json
@@ -239,6 +240,100 @@ async def get_messages(
         .limit(200)
     )
     return result.scalars().all()
+
+# ── Token-based auth helper (for download URLs) ───────────────────────────
+async def _resolve_user(request: Request, token: str | None = None, db: AsyncSession = Depends(get_db)) -> User:
+    from jose import jwt, JWTError
+    from app.config import settings
+    raw = token or request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    if not raw:
+        raise HTTPException(401, "Not authenticated")
+    try:
+        payload = jwt.decode(raw, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id = int(payload.get("sub"))
+    except (JWTError, TypeError, ValueError):
+        raise HTTPException(401, "Invalid token")
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(401, "User not found")
+    return user
+
+# ── Send file / voice attachment via HTTP ─────────────────────────────────
+@router.post("/rooms/{room_id}/attachments")
+async def send_attachment(
+    room_id: int,
+    data: ChatFileUpload,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    message = ChatMessage(
+        room_id=room_id,
+        sender_id=current_user.id,
+        content=data.content or "",
+        file_data=data.file_data,
+        file_name=data.file_name,
+        file_content_type=data.file_content_type,
+        file_size=data.file_size,
+    )
+    db.add(message)
+    await db.commit()
+    await db.refresh(message)
+
+    broadcast_data = {
+        "id": message.id,
+        "room_id": room_id,
+        "sender_id": current_user.id,
+        "sender_name": current_user.name,
+        "content": message.content,
+        "file_name": data.file_name,
+        "file_content_type": data.file_content_type,
+        "file_size": data.file_size,
+        "created_at": message.created_at.isoformat(),
+    }
+    await manager.broadcast(broadcast_data, room_id)
+
+    # Notify the other participant via presence socket
+    async with AsyncSessionLocal() as notify_db:
+        inv_q = await notify_db.execute(
+            select(DirectInvitation).where(
+                DirectInvitation.room_id == room_id,
+                DirectInvitation.status == "accepted",
+            )
+        )
+        inv = inv_q.scalar_one_or_none()
+        if inv:
+            other_id = inv.to_id if inv.from_id == current_user.id else inv.from_id
+            await notify_user(other_id, {
+                "type": "new_message",
+                "room_id": room_id,
+                "from_name": current_user.name,
+                "preview": f"[{data.file_name}]",
+            })
+
+    return {"id": message.id, "created_at": message.created_at.isoformat()}
+
+# ── Download file attachment ───────────────────────────────────────────────
+@router.get("/rooms/{room_id}/messages/{msg_id}/download")
+async def download_attachment(
+    room_id: int,
+    msg_id: int,
+    current_user: User = Depends(_resolve_user),
+    db: AsyncSession = Depends(get_db),
+):
+    import base64 as b64
+    result = await db.execute(
+        select(ChatMessage).where(ChatMessage.id == msg_id, ChatMessage.room_id == room_id)
+    )
+    msg = result.scalar_one_or_none()
+    if not msg or not msg.file_data:
+        raise HTTPException(404, "File not found")
+    file_bytes = b64.b64decode(msg.file_data)
+    return HTTPResponse(
+        content=file_bytes,
+        media_type=msg.file_content_type or "application/octet-stream",
+        headers={"Content-Disposition": f'inline; filename="{msg.file_name}"'},
+    )
 
 # ── Chat WebSocket ─────────────────────────────────────────────────────────
 class ConnectionManager:

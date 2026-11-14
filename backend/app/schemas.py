@@ -111,11 +111,21 @@ class ChatRoomOut(ChatRoomBase):
     class Config:
         from_attributes = True
 
+class ChatFileUpload(BaseModel):
+    file_data: str           # base64-encoded
+    file_name: str
+    file_content_type: str
+    file_size: int
+    content: Optional[str] = None   # optional caption
+
 class ChatMessageOut(BaseModel):
     id: int
     room_id: int
     sender_id: int
     content: str
+    file_name: Optional[str] = None
+    file_content_type: Optional[str] = None
+    file_size: Optional[int] = None
     created_at: datetime
     sender: Optional[UserOut] = None
     class Config:
