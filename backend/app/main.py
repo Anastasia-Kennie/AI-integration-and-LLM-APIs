@@ -28,7 +28,8 @@ async def seed_admin():
     from app.auth import get_password_hash
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.email == "petegrizk.engineer@gmail.com"))
-        if result.scalar_one_or_none() is None:
+        existing = result.scalar_one_or_none()
+        if existing is None:
             admin = User(
                 name="Peter Rizk",
                 email="petegrizk.engineer@gmail.com",
@@ -38,7 +39,11 @@ async def seed_admin():
                 is_active=True,
             )
             db.add(admin)
-            await db.commit()
+        else:
+            existing.is_approved = True
+            existing.is_active = True
+            existing.role = "manager"
+        await db.commit()
 
 @app.on_event("startup")
 async def startup():
