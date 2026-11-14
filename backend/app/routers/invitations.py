@@ -1,12 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func, cast, Date
 from sqlalchemy.orm import selectinload
 from typing import List
+from datetime import date
 from app.database import get_db
 from app.models import User, DirectInvitation, ChatRoom
 from app.schemas import InvitationOut, InvitationCreate
 from app.auth import get_current_user
+
+DAILY_INVITE_LIMIT = 10
+
+async def _invites_sent_today(db: AsyncSession, user_id: int) -> int:
+    result = await db.execute(
+        select(func.count(DirectInvitation.id)).where(
+            DirectInvitation.from_id == user_id,
+            cast(DirectInvitation.created_at, Date) == date.today(),
+        )
+    )
+    return result.scalar() or 0
 
 router = APIRouter(prefix="/api/invitations", tags=["invitations"])
 
@@ -16,6 +28,10 @@ async def send_invitation(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    sent_today = await _invites_sent_today(db, current_user.id)
+    if sent_today >= DAILY_INVITE_LIMIT:
+        raise HTTPException(429, f"Daily invitation limit reached ({DAILY_INVITE_LIMIT}/day). Try again tomorrow.")
+
     result = await db.execute(select(User).where(User.email == data.to_email))
     target = result.scalar_one_or_none()
     if not target:
@@ -52,6 +68,14 @@ async def send_invitation(
 
     return inv
 
+
+@router.get("/remaining")
+async def remaining_invites(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    sent = await _invites_sent_today(db, current_user.id)
+    return {"remaining": max(0, DAILY_INVITE_LIMIT - sent), "limit": DAILY_INVITE_LIMIT}
 
 @router.get("/received", response_model=List[InvitationOut])
 async def get_received(

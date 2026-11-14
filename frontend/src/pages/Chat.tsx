@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { usePresence } from '../contexts/PresenceContext'
 import api from '../services/api'
 import { WS_BASE } from '../lib/urls'
-import { Send, UserPlus, Check, X, Mail, Circle } from 'lucide-react'
+import { Send, UserPlus, Check, X, Mail, Circle, Trash2 } from 'lucide-react'
 import clsx from 'clsx'
 import Avatar from '../components/Avatar'
 
@@ -41,19 +41,21 @@ function PresenceDot({ status }: { status: 'online' | 'away' | 'offline' }) {
   return <Circle size={8} className={clsx('fill-current shrink-0', PRESENCE_COLOR[status])} />
 }
 
-
 export default function Chat() {
   const { user, token } = useAuth()
-  const { lastEvent, refreshUnread } = usePresence()
-  const [contacts,    setContacts]    = useState<Contact[]>([])
-  const [invitations, setInvitations] = useState<Invitation[]>([])
-  const [active,      setActive]      = useState<Contact | null>(null)
-  const [messages,    setMessages]    = useState<Message[]>([])
-  const [input,       setInput]       = useState('')
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [showInvite,  setShowInvite]  = useState(false)
-  const [inviteErr,   setInviteErr]   = useState('')
-  const [inviteSent,  setInviteSent]  = useState(false)
+  const { lastEvent, refreshUnread, unreadRooms } = usePresence()
+  const [contacts,       setContacts]       = useState<Contact[]>([])
+  const [invitations,    setInvitations]    = useState<Invitation[]>([])
+  const [active,         setActive]         = useState<Contact | null>(null)
+  const [messages,       setMessages]       = useState<Message[]>([])
+  const [input,          setInput]          = useState('')
+  const [inviteEmail,    setInviteEmail]    = useState('')
+  const [showInvite,     setShowInvite]     = useState(false)
+  const [inviteErr,      setInviteErr]      = useState('')
+  const [inviteSent,     setInviteSent]     = useState(false)
+  const [remaining,      setRemaining]      = useState<number | null>(null)
+  const [hoverContact,   setHoverContact]   = useState<number | null>(null)
+  const [deleteConfirm,  setDeleteConfirm]  = useState<Contact | null>(null)
   const ws        = useRef<WebSocket | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -65,22 +67,25 @@ export default function Chat() {
     api.get('/api/invitations/received').then(r => setInvitations(r.data)).catch(() => {})
   }, [])
 
-  // React to presence push events (invitation / accepted from other users)
+  const loadRemaining = useCallback(() => {
+    api.get('/api/invitations/remaining').then(r => setRemaining(r.data.remaining)).catch(() => {})
+  }, [])
+
   useEffect(() => {
     if (!lastEvent) return
     if (lastEvent.type === 'invitation') loadInvitations()
     if (lastEvent.type === 'accepted')   { loadContacts(); loadInvitations() }
   }, [lastEvent, loadContacts, loadInvitations])
 
-  useEffect(() => { loadContacts(); loadInvitations() }, [loadContacts, loadInvitations])
+  useEffect(() => {
+    loadContacts(); loadInvitations(); loadRemaining()
+  }, [loadContacts, loadInvitations, loadRemaining])
 
-  // Refresh presence status every 30s
   useEffect(() => {
     const t = setInterval(loadContacts, 30000)
     return () => clearInterval(t)
   }, [loadContacts])
 
-  // Load messages + open room WS + mark as read
   useEffect(() => {
     if (!active) return
     api.get(`/api/chat/rooms/${active.room_id}/messages`).then(r => {
@@ -109,6 +114,7 @@ export default function Chat() {
     try {
       await api.post('/api/invitations/', { to_email: inviteEmail })
       setInviteSent(true)
+      loadRemaining()
       setTimeout(() => { setInviteSent(false); setShowInvite(false); setInviteEmail('') }, 2000)
     } catch (ex: any) {
       setInviteErr(ex.response?.data?.detail || 'Failed to send invitation')
@@ -125,6 +131,14 @@ export default function Chat() {
     loadInvitations()
   }
 
+  async function removeContact(c: Contact) {
+    await api.delete(`/api/chat/contacts/${c.room_id}`)
+    setContacts(prev => prev.filter(x => x.room_id !== c.room_id))
+    if (active?.room_id === c.room_id) { setActive(null); setMessages([]) }
+    setDeleteConfirm(null)
+  }
+
+  const unreadByRoom = Object.fromEntries(unreadRooms.map(r => [r.room_id, r.unread_count]))
   const fmt = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
   return (
@@ -143,18 +157,34 @@ export default function Chat() {
         {/* Invite form */}
         {showInvite && (
           <div className="p-3 border-b border-gray-100 bg-primary-50/40">
-            <p className="text-xs font-medium text-gray-600 mb-1.5">Invite by email</p>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs font-medium text-gray-600">Invite by email</p>
+              {remaining !== null && (
+                <span className={clsx('text-[10px] font-semibold px-1.5 py-0.5 rounded-full',
+                  remaining === 0 ? 'bg-red-100 text-red-600' :
+                  remaining <= 3  ? 'bg-amber-100 text-amber-700' :
+                                    'bg-green-100 text-green-700')}>
+                  {remaining}/10 left today
+                </span>
+              )}
+            </div>
             <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && sendInvite()}
+              onKeyDown={e => e.key === 'Enter' && remaining !== 0 && sendInvite()}
               placeholder="colleague@example.com"
-              className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white"
+              disabled={remaining === 0}
+              className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 bg-white disabled:opacity-50"
               autoFocus />
             {inviteErr  && <p className="mt-1 text-xs text-red-500">{inviteErr}</p>}
             {inviteSent && <p className="mt-1 text-xs text-green-600">✓ Invitation sent!</p>}
-            <button onClick={sendInvite}
-              className="mt-2 w-full py-1.5 bg-primary-600 text-white text-xs rounded-lg hover:bg-primary-700 transition-colors">
-              Send invitation
-            </button>
+            {remaining === 0
+              ? <p className="mt-2 text-xs text-red-500 text-center">No invitations left today. Try again tomorrow.</p>
+              : (
+                <button onClick={sendInvite} disabled={!inviteEmail.trim()}
+                  className="mt-2 w-full py-1.5 bg-primary-600 text-white text-xs rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors">
+                  Send invitation
+                </button>
+              )
+            }
           </div>
         )}
 
@@ -196,26 +226,48 @@ export default function Chat() {
               <UserPlus size={28} className="mx-auto mb-2 opacity-20" />
               No conversations yet.<br />Invite a colleague to start.
             </div>
-          ) : contacts.map(c => (
-            <button key={c.invitation_id} onClick={() => setActive(c)}
-              className={clsx(
-                'flex items-center gap-3 w-full px-4 py-3 text-left transition-colors',
-                active?.invitation_id === c.invitation_id
-                  ? 'bg-primary-50 border-r-2 border-primary-600'
-                  : 'hover:bg-gray-50'
-              )}>
-              <div className="relative">
-                <Avatar name={c.user.name} avatar={c.user.avatar} size={9} />
-                <span className="absolute -bottom-0.5 -right-0.5">
-                  <PresenceDot status={c.presence} />
-                </span>
+          ) : contacts.map(c => {
+            const unread = unreadByRoom[c.room_id] ?? 0
+            return (
+              <div key={c.invitation_id}
+                className="relative group"
+                onMouseEnter={() => setHoverContact(c.invitation_id)}
+                onMouseLeave={() => setHoverContact(null)}>
+                <button onClick={() => setActive(c)}
+                  className={clsx(
+                    'flex items-center gap-3 w-full px-4 py-3 text-left transition-colors pr-10',
+                    active?.invitation_id === c.invitation_id
+                      ? 'bg-primary-50 border-r-2 border-primary-600'
+                      : 'hover:bg-gray-50'
+                  )}>
+                  <div className="relative">
+                    <Avatar name={c.user.name} avatar={c.user.avatar} size={9} />
+                    <span className="absolute -bottom-0.5 -right-0.5">
+                      <PresenceDot status={c.presence} />
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{c.user.name}</p>
+                    <p className={clsx('text-[10px] capitalize', PRESENCE_COLOR[c.presence])}>{c.presence}</p>
+                  </div>
+                  {unread > 0 && active?.room_id !== c.room_id && (
+                    <span className="ml-auto shrink-0 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold bg-primary-600 text-white rounded-full px-1">
+                      {unread > 99 ? '99+' : unread}
+                    </span>
+                  )}
+                </button>
+                {/* Delete button — visible on hover */}
+                {hoverContact === c.invitation_id && (
+                  <button
+                    onClick={e => { e.stopPropagation(); setDeleteConfirm(c) }}
+                    title="Remove contact"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                    <Trash2 size={13} />
+                  </button>
+                )}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800 truncate">{c.user.name}</p>
-                <p className={clsx('text-[10px] capitalize', PRESENCE_COLOR[c.presence])}>{c.presence}</p>
-              </div>
-            </button>
-          ))}
+            )
+          })}
         </div>
       </div>
 
@@ -284,6 +336,28 @@ export default function Chat() {
           </div>
         )}
       </div>
+
+      {/* Delete contact confirmation */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 shadow-xl w-80">
+            <h3 className="font-semibold text-gray-900 mb-1">Remove {deleteConfirm.user.name}?</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              This deletes your chat history. To chat again, one of you must send a new invitation.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => removeContact(deleteConfirm)}
+                className="flex-1 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors">
+                Remove
+              </button>
+              <button onClick={() => setDeleteConfirm(null)}
+                className="flex-1 py-2 border border-gray-200 text-sm text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

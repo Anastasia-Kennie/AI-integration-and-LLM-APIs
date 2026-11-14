@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, delete as sql_delete
 from sqlalchemy.orm import selectinload
 from typing import List, Dict
 from datetime import datetime, timezone
@@ -104,6 +104,34 @@ async def get_contacts(
             presence=presence_status(other),
         ))
     return contacts
+
+# ── Remove contact ────────────────────────────────────────────────────────
+@router.delete("/contacts/{room_id}")
+async def remove_contact(
+    room_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    inv_result = await db.execute(
+        select(DirectInvitation).where(
+            or_(DirectInvitation.from_id == current_user.id, DirectInvitation.to_id == current_user.id),
+            DirectInvitation.room_id == room_id,
+            DirectInvitation.status == "accepted",
+        )
+    )
+    inv = inv_result.scalar_one_or_none()
+    if not inv:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    # delete messages, last-reads, invitation, room
+    await db.execute(sql_delete(ChatMessage).where(ChatMessage.room_id == room_id))
+    await db.execute(sql_delete(RoomLastRead).where(RoomLastRead.room_id == room_id))
+    await db.delete(inv)
+    room_result = await db.execute(select(ChatRoom).where(ChatRoom.id == room_id))
+    room = room_result.scalar_one_or_none()
+    if room:
+        await db.delete(room)
+    await db.commit()
+    return {"message": "Contact removed"}
 
 # ── Unread messages ────────────────────────────────────────────────────────
 @router.get("/unread", response_model=List[UnreadRoomOut])
