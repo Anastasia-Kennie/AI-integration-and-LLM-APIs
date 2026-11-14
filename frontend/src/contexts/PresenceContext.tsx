@@ -70,6 +70,13 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
       }, 30000)
     }
 
+    // HTTP heartbeat — keeps presence "online" even when WebSocket can't connect
+    const sendHeartbeat = () => {
+      if (!cancelled) api.post('/api/users/heartbeat').catch(() => {})
+    }
+    sendHeartbeat()
+    const heartbeatInterval = setInterval(sendHeartbeat, 45000)
+
     connect()
     refreshUnread()
 
@@ -77,6 +84,7 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
       cancelled = true
       wsRef.current?.close()
       if (pingRef.current) clearInterval(pingRef.current)
+      clearInterval(heartbeatInterval)
     }
   }, [token, user, refreshUnread])
 

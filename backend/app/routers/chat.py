@@ -26,6 +26,8 @@ def presence_status(user: User) -> str:
             if ls.tzinfo is None:
                 ls = ls.replace(tzinfo=timezone.utc)
             delta = (datetime.now(timezone.utc) - ls).total_seconds()
+            if delta < 90:   # heartbeat within 90s → treat as online
+                return "online"
             if delta < 600:
                 return "away"
         except Exception:

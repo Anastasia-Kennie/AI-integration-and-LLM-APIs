@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
+from datetime import datetime, timezone
 from app.database import get_db
 from app.models import User
 from app.schemas import UserOut, UserUpdate
@@ -107,6 +108,15 @@ async def delete_user(
     await db.delete(user)
     await db.commit()
     return {"message": "User deleted"}
+
+@router.post("/heartbeat")
+async def heartbeat(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    current_user.last_seen = datetime.now(timezone.utc)
+    await db.commit()
+    return {"status": "ok"}
 
 @router.get("/{user_id}", response_model=UserOut)
 async def get_user(
