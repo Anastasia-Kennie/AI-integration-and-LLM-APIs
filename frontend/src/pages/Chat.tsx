@@ -497,6 +497,10 @@ export default function Chat() {
                     disabled={uploading}
                     className="w-full px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50" />
                   <div className="flex items-center justify-between">
+                    <button onClick={sendMessage} disabled={!input.trim() || uploading}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors">
+                      <Send size={14} /> Send
+                    </button>
                     <div className="flex items-center gap-1">
                       <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
                         title="Attach file"
@@ -509,10 +513,6 @@ export default function Chat() {
                         <Mic size={16} />
                       </button>
                     </div>
-                    <button onClick={sendMessage} disabled={!input.trim() || uploading}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors">
-                      <Send size={14} /> Send
-                    </button>
                   </div>
                 </div>
               )}
