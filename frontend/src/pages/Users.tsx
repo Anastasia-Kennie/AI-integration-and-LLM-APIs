@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
-import { Users as UsersIcon, Search, ShieldCheck, UserCircle, Phone, MapPin, Globe, Cake, Mail, Calendar, ChevronDown, ChevronUp, Trash2, AlertTriangle } from 'lucide-react'
+import { Users as UsersIcon, Search, ShieldCheck, UserCircle, Phone, MapPin, Globe, Cake, Mail, Calendar, ChevronDown, ChevronUp, Trash2, AlertTriangle, RefreshCw } from 'lucide-react'
 import clsx from 'clsx'
 import AvatarComp from '../components/Avatar'
 
@@ -213,14 +213,27 @@ export default function UsersPage() {
                   </td>
                   {/* actions */}
                   <td className="px-5 py-4">
-                    {u.id !== me?.id && (
-                      <button
-                        onClick={() => setConfirmId(u.id)}
-                        className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
-                        title="Delete user">
-                        <Trash2 size={15} />
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1">
+                      {u.avatar && u.id !== me?.id && (
+                        <button
+                          onClick={async () => {
+                            await api.delete(`/api/users/${u.id}/avatar`)
+                            setUsers(prev => prev.map(x => x.id === u.id ? { ...x, avatar: null } : x))
+                          }}
+                          className="p-1.5 rounded-lg text-gray-300 hover:text-amber-500 hover:bg-amber-50 transition-colors"
+                          title="Reset avatar to default">
+                          <RefreshCw size={14} />
+                        </button>
+                      )}
+                      {u.id !== me?.id && (
+                        <button
+                          onClick={() => setConfirmId(u.id)}
+                          className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          title="Delete user">
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

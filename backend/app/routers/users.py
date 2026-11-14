@@ -85,6 +85,20 @@ async def update_me(
     await db.refresh(current_user)
     return current_user
 
+@router.delete("/{user_id}/avatar")
+async def reset_avatar(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_manager)
+):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.avatar = None
+    await db.commit()
+    return {"message": "Avatar reset"}
+
 @router.delete("/{user_id}")
 async def delete_user(
     user_id: int,
