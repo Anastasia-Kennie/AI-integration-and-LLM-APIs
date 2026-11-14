@@ -100,8 +100,6 @@ async def upload_file(
 ):
     await _get_project(project_id, db, current_user)
     raw = await file.read()
-    if len(raw) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
     pf = ProjectFile(
         project_id=project_id,
         uploader_id=current_user.id,
